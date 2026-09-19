@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -106,7 +106,7 @@
     padding:8px 13px;box-shadow:var(--shadow);font-weight:600;font-size:13px;color:var(--ink);
   }
   .sidebar-backdrop{
-    display:none;position:fixed;inset:0;background:rgba(38,48,31,0.45);z-index:800;
+    display:none;position:fixed;inset:0;background:rgba(38,48,31,0.45);z-index:300;
   }
   .sidebar-backdrop.show{display:block;}
 
@@ -130,7 +130,14 @@
 
   /* ===== Map area ===== */
   .mapwrap{flex:1;position:relative;min-width:0;}
-  #map{height:100%;width:100%;min-height:260px;background:#DCE6D2;}
+  #map{height:100%;width:100%;min-height:260px;background:#DCE6D2;position:relative;z-index:0;}
+  /* Leaflet's own panes/controls carry z-index values up to 1000 and, once the
+     map has been panned, get promoted to their own compositing layer by most
+     browsers — which can make them paint above later page elements regardless
+     of DOM order. Pinning the container's stacking context here keeps every
+     one of our own overlays (drawer, sidebar, modal, etc.) reliably on top. */
+  .leaflet-container{z-index:0;}
+  .leaflet-top, .leaflet-bottom{z-index:2 !important;}
   #map.addmode{cursor:crosshair;}
 
   .leaf-badge{
@@ -149,7 +156,7 @@
   .drawer{
     position:absolute;top:14px;right:14px;bottom:14px;width:330px;
     background:var(--surface);border-radius:10px;box-shadow:var(--shadow);
-    border:1px solid var(--line);padding:0;overflow-y:auto;display:none;z-index:950;
+    border:1px solid var(--line);padding:0;overflow-y:auto;display:none;z-index:400;
   }
   .drawer.show{display:block;}
   .drawer-head{padding:16px 16px 10px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);}
@@ -283,7 +290,7 @@
     .sidebar-toggle-btn{display:block;}
 
     .sidebar{
-      position:fixed;top:0;bottom:0;left:0;z-index:900;
+      position:fixed;top:0;bottom:0;left:0;z-index:350;
       width:82vw;max-width:320px;
       transform:translateX(-100%);
       transition:transform .25s ease;
