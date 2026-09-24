@@ -10,6 +10,11 @@ This README covers the two things you need to do before it works:
 1. Turn a Google Sheet into the app's shared database.
 2. Publish the site on GitHub Pages.
 
+**Upgrading an existing deployment?** This version changes how disagreement
+works (see Section 1a) and, as part of that, renames some columns in the
+Sheet. If you already have `Code.gs` deployed from an earlier version,
+see the callout at the end of Section 2 before redeploying.
+
 ---
 
 ## 1. Why a Google Sheet?
@@ -30,6 +35,26 @@ sheet for changes every 20 seconds while it's open (and right after you take
 an action yourself), so other people's changes appear within about 20
 seconds rather than instantly. For a classroom project, that's a reasonable
 trade for the much simpler setup.
+
+## 1a. How voting works
+
+Each of a tree's four attributes (location, species, height, diameter) gets:
+
+- **👍 Agree** — a plain thumbs-up, tallied as a count.
+- **👎 Suggest a fix** — disagreeing isn't a bare thumbs-down; it requires
+  saying what you think the correct value actually is. For species, that
+  means picking an alternative from the same species picker used to log a
+  tree. For height/diameter, it's a number. For location, you tap the map to
+  show where you think the tree actually is.
+
+Matching suggestions are tallied together (e.g. if three people all propose
+"White Oak," that shows as one entry with a count of 3, not three separate
+entries), and the full list of proposed alternatives is shown right on the
+tree's card, sorted by how many people proposed each one — so at a glance
+you can see not just *that* people disagree, but what they think is right.
+Each device can only have one active vote per attribute at a time (an agree,
+or one proposed alternative), and can change or remove it any time before a
+teacher locks the tree.
 
 ## 2. Set up the Google Sheet (10 minutes)
 
@@ -68,6 +93,17 @@ by hand.
 add a column, etc.), you need to click **Deploy → Manage deployments →
 edit (pencil icon) → Version: New version → Deploy** for the changes to take
 effect — saving the file alone isn't enough for an existing deployment.
+
+> **⚠️ Upgrading from an earlier version of this app?** This version renames
+> the "disagree count" columns to "alternatives" columns (which now store a
+> small JSON list instead of a number), to support the new propose-a-fix
+> voting model. Pasting the new `Code.gs` over an *existing, already-used*
+> sheet won't auto-migrate old data — the safest path is to create a **new
+> sheet** (or a new tab) and follow the setup steps fresh. If you want to
+> keep existing tree rows, you can instead manually rename the header cells
+> `voteLocationDisagree` → `voteLocationAlternatives` (and the same for
+> species/height/diameter) and clear out their existing numeric values, so
+> the app starts reading/writing them as the new JSON format.
 
 ## 3. Publish on GitHub Pages (5 minutes)
 
@@ -135,7 +171,20 @@ automatically.
   (one poll cycle), not immediately. Your own actions always show up
   instantly on your own screen.
 
-## 6. About the ecological estimates
+## 6. Satellite view & "my location"
+
+- The 🛰️ **Satellite** button over the map swaps between the default street
+  map (OpenStreetMap) and satellite imagery (Esri World Imagery, no API key
+  needed). Both tile sets are cached for offline use the same way, so
+  whichever view a student has looked at stays available offline.
+- The 📍 **My location** button uses the browser's geolocation (it'll ask for
+  permission the first time) and shows a small pulsing blue dot at the
+  student's position, updating live as they walk around — handy for lining
+  up a pin with where they're actually standing. It requires HTTPS, which
+  GitHub Pages provides automatically; it won't work if the page is opened
+  as a local file.
+
+## 7. About the ecological estimates
 
 The CO₂, O₂, and shade figures shown for each tree are calculated
 automatically from its species, height, and trunk diameter using standard,
@@ -144,7 +193,7 @@ professional tree inventory tool). Each tree's detail panel has a "How is
 this calculated?" link explaining the formulas in plain language — a good
 discussion starting point for a class.
 
-## 7. Customizing
+## 8. Customizing
 
 - **Teacher passcode**: search `index.html` for `TEACHER_PASSCODE` and
   change `"wrdsb-trees"` to something else. This is a lightweight classroom
@@ -156,7 +205,7 @@ discussion starting point for a class.
 - **Sheet columns**: defined in the `COLUMNS` array at the top of `Code.gs`
   — if you add a column, add its name there too.
 
-## 8. If something doesn't look right
+## 9. If something doesn't look right
 
 - Blank grey map / tiles not loading: usually a first-load-while-offline
   situation, or (if you're viewing this inside a Claude conversation
