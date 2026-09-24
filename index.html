@@ -1,0 +1,1905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#374F2C">
+<meta name="description" content="Collaborative schoolyard tree map for Waterloo Region District School Board students and teachers.">
+<title>Understory — WRDSB Tree Map</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EDE7D9;
+    --surface:#FBFAF4;
+    --surface-2:#F2EDDE;
+    --ink:#26301F;
+    --ink-soft:#5B6350;
+    --line:#DCD4BC;
+    --moss:#4C6B3F;
+    --moss-dark:#374F2C;
+    --bark:#8A6A45;
+    --gold:#B9822C;
+    --gold-bg:#F3E4C4;
+    --approved:#3F7A52;
+    --approved-bg:#DFEBDF;
+    --disagree:#AE5138;
+    --disagree-bg:#F3E0D8;
+    --shadow: 0 6px 20px rgba(38,48,31,0.12);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:'IBM Plex Sans', sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    height:100vh;
+    height:calc(var(--vh, 1vh) * 100); /* corrected on phones by a small JS snippet below */
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  h1,h2,h3,.serif{font-family:'Fraunces', serif;}
+  button{font-family:inherit;cursor:pointer;}
+  select,input{font-family:inherit;}
+
+  /* ===== Top bar ===== */
+  .status-banner{
+    display:none;align-items:center;gap:8px;padding:8px 18px;font-size:12.5px;font-weight:600;
+    flex-shrink:0;
+  }
+  .status-banner.show{display:flex;}
+  .status-banner.offline{background:#F3E4C4;color:#6B4A16;}
+  .status-banner.setup{background:#F3D8D8;color:#7A2E2E;}
+  .status-banner a{color:inherit;}
+
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 22px;
+    background:var(--moss-dark);
+    color:#F4F1E4;
+    flex-shrink:0;
+    border-bottom:3px solid var(--bark);
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand h1{font-size:22px;font-weight:600;margin:0;letter-spacing:0.2px;}
+  .brand .leafmark{font-size:20px;}
+  .brand .sub{font-size:12.5px;color:#C9D3BC;font-weight:500;}
+  .roletabs{display:flex;background:rgba(0,0,0,0.18);border-radius:8px;padding:3px;gap:2px;}
+  .roletabs button{
+    border:none;background:transparent;color:#E5E7D8;padding:7px 16px;
+    border-radius:6px;font-size:13.5px;font-weight:600;
+  }
+  .roletabs button.active{background:var(--gold);color:#2B2308;}
+
+  /* ===== Layout ===== */
+  .app{flex:1;display:flex;min-height:0;}
+  .sidebar{
+    width:290px;flex-shrink:0;background:var(--surface);
+    border-right:1px solid var(--line);
+    padding:18px 16px;overflow-y:auto;
+  }
+  .sidebar h2{font-size:14px;text-transform:none;margin:0 0 10px 0;color:var(--ink);font-weight:600;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:5px;font-weight:600;}
+  .field select, .field input[type=text]{
+    width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:6px;
+    background:var(--surface-2);font-size:13.5px;color:var(--ink);
+  }
+  .legend{display:flex;flex-direction:column;gap:8px;margin-bottom:18px;padding:12px;background:var(--surface-2);border-radius:8px;border:1px solid var(--line);}
+  .legend-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-soft);}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex-shrink:0;}
+  .dot.suggested{background:var(--gold);}
+  .dot.approved{background:var(--approved);}
+  .stat-line{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+
+  .sidebar-toggle-btn{
+    display:none; /* shown only on narrow screens, see media query below */
+    position:absolute;top:12px;left:12px;z-index:500;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    padding:8px 13px;box-shadow:var(--shadow);font-weight:600;font-size:13px;color:var(--ink);
+  }
+  .map-controls-extra{
+    position:absolute;top:12px;right:12px;z-index:500;
+    display:flex;flex-direction:column;gap:8px;align-items:flex-end;
+  }
+  .map-ctrl-btn{
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    padding:8px 13px;box-shadow:var(--shadow);font-weight:600;font-size:13px;color:var(--ink);
+    white-space:nowrap;
+  }
+  .map-ctrl-btn:hover{background:var(--surface-2);}
+  .map-ctrl-btn.active{background:var(--moss);color:#F4F1E4;border-color:var(--moss);}
+
+  .you-are-here{position:relative;width:22px;height:22px;}
+  .yah-dot{
+    position:absolute;top:50%;left:50%;width:14px;height:14px;margin:-7px 0 0 -7px;
+    background:#2A6FDB;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.4);z-index:2;
+  }
+  .yah-pulse{
+    position:absolute;top:50%;left:50%;width:22px;height:22px;margin:-11px 0 0 -11px;
+    background:rgba(42,111,219,0.35);border-radius:50%;
+    animation:yah-pulse-anim 2s ease-out infinite;
+  }
+  @keyframes yah-pulse-anim{
+    0%{transform:scale(0.4);opacity:1;}
+    100%{transform:scale(1.8);opacity:0;}
+  }
+  .sidebar-backdrop{
+    display:none;position:fixed;inset:0;background:rgba(38,48,31,0.45);z-index:300;
+  }
+  .sidebar-backdrop.show{display:block;}
+
+  .btn{
+    display:block;width:100%;padding:10px 12px;border-radius:7px;border:1px solid var(--moss);
+    background:var(--moss);color:#F4F1E4;font-weight:600;font-size:13.5px;text-align:center;
+  }
+  .btn:hover{background:var(--moss-dark);}
+  .btn.secondary{background:transparent;color:var(--moss-dark);border:1px solid var(--moss);}
+  .btn.secondary:hover{background:var(--surface-2);}
+  .btn.danger{background:transparent;color:var(--disagree);border:1px solid var(--disagree);}
+  .btn.danger:hover{background:var(--disagree-bg);}
+  .btn.small{padding:6px 10px;font-size:12.5px;width:auto;}
+  .btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+  .map-banner{
+    display:none;position:absolute;left:50%;top:12px;transform:translateX(-50%);
+    max-width:min(88vw,360px);z-index:500;text-align:center;
+    padding:10px 14px;background:var(--gold-bg);border:1px solid var(--gold);
+    border-radius:9px;font-size:12.5px;color:#6B4A16;box-shadow:var(--shadow);
+  }
+  .map-banner.show{display:block;}
+
+  /* ===== Map area ===== */
+  .mapwrap{flex:1;position:relative;min-width:0;}
+  #map{height:100%;width:100%;min-height:260px;background:#DCE6D2;position:relative;z-index:0;}
+  /* Leaflet's own panes/controls carry z-index values up to 1000 and, once the
+     map has been panned, get promoted to their own compositing layer by most
+     browsers — which can make them paint above later page elements regardless
+     of DOM order. Pinning the container's stacking context here keeps every
+     one of our own overlays (drawer, sidebar, modal, etc.) reliably on top. */
+  .leaflet-container{z-index:0;}
+  .leaflet-top, .leaflet-bottom{z-index:2 !important;}
+  #map.addmode{cursor:crosshair;}
+
+  .leaf-badge{
+    display:flex;align-items:center;justify-content:center;
+    width:30px;height:30px;border-radius:50% 50% 50% 4px;
+    transform:rotate(-45deg);
+    border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);
+    font-size:11px;font-weight:700;color:#fff;
+  }
+  .leaf-badge span{transform:rotate(45deg);}
+  .leaf-badge.suggested{background:var(--gold);}
+  .leaf-badge.approved{background:var(--approved);}
+  .leaf-badge.draft{background:var(--bark);}
+
+  /* ===== Detail drawer ===== */
+  .drawer{
+    position:absolute;top:14px;right:14px;bottom:14px;width:330px;
+    background:var(--surface);border-radius:10px;box-shadow:var(--shadow);
+    border:1px solid var(--line);padding:0;overflow-y:auto;display:none;z-index:400;
+  }
+  .drawer.show{display:block;}
+  .drawer-head{padding:16px 16px 10px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);}
+  .drawer-head h3{margin:0 0 4px 0;font-size:18px;}
+  .drawer-head .sci{font-style:italic;color:var(--ink-soft);font-size:13px;}
+  .drawer-close{position:absolute;top:12px;right:14px;background:none;border:none;font-size:18px;color:var(--ink-soft);}
+  .status-pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;margin-top:8px;}
+  .status-pill.suggested{background:var(--gold-bg);color:#6B4A16;}
+  .status-pill.approved{background:var(--approved-bg);color:var(--approved);}
+  .drawer-body{padding:14px 16px;}
+  .attr-row{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line);}
+  .attr-row:last-child{border-bottom:none;}
+  .attr-row .attr-label{font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--ink-soft);font-weight:600;margin-bottom:3px;}
+  .attr-row .attr-value{font-size:16px;font-weight:600;margin-bottom:8px;}
+  .vote-row{display:flex;align-items:center;gap:8px;}
+  .vote-btn{
+    flex:1;padding:6px 4px;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);
+    font-size:12.5px;font-weight:600;color:var(--ink-soft);display:flex;align-items:center;justify-content:center;gap:5px;
+  }
+  .vote-btn.agree.active{background:var(--approved-bg);border-color:var(--approved);color:var(--approved);}
+  .vote-btn.disagree.active{background:var(--disagree-bg);border-color:var(--disagree);color:var(--disagree);}
+  .vote-count{font-size:11px;opacity:0.85;}
+  .alt-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .alt-chip{
+    font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:20px;
+    background:var(--surface-2);border:1px solid var(--line);color:var(--ink-soft);
+  }
+  button.alt-chip{cursor:pointer;}
+  button.alt-chip:hover{background:var(--gold-bg);border-color:var(--gold);}
+  .alt-chip.mine{background:var(--gold-bg);border-color:var(--gold);color:#6B4A16;}
+  .remove-my-vote{
+    background:none;border:none;padding:0;margin-top:7px;font-size:11.5px;
+    color:var(--disagree);text-decoration:underline;font-weight:600;
+  }
+  .locked-note{font-size:12px;color:var(--ink-soft);font-style:italic;}
+  .meta-line{font-size:11.5px;color:var(--ink-soft);margin-top:10px;}
+
+  .eco-section{margin:0 0 16px 0;padding:14px;background:var(--approved-bg);border:1px solid var(--approved);border-radius:9px;}
+  .eco-title{font-family:'Fraunces',serif;font-size:15px;font-weight:600;color:var(--moss-dark);margin-bottom:10px;}
+  .eco-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .eco-card{background:var(--surface);border-radius:7px;padding:8px 9px;border:1px solid var(--line);}
+  .eco-card-value{font-size:15px;font-weight:700;color:var(--moss-dark);}
+  .eco-card-label{font-size:10.5px;color:var(--ink-soft);margin-top:2px;line-height:1.3;}
+  .eco-fact{font-size:12px;color:var(--ink-soft);margin-top:10px;line-height:1.5;font-style:italic;}
+  .eco-toggle{background:none;border:none;padding:0;margin-top:9px;font-size:11.5px;color:var(--moss-dark);
+    text-decoration:underline;font-weight:600;}
+  .eco-info{display:none;font-size:11.5px;color:var(--ink-soft);margin-top:8px;line-height:1.5;
+    background:var(--surface);border-radius:6px;padding:9px;border:1px solid var(--line);}
+  .eco-info.show{display:block;}
+
+  .impact-box{margin-top:16px;padding:12px;background:var(--approved-bg);border:1px solid var(--approved);border-radius:8px;}
+  .impact-box .impact-title{font-size:11.5px;font-weight:700;color:var(--moss-dark);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:6px;}
+  .impact-box .impact-line{font-size:12.5px;color:var(--ink);margin-bottom:2px;}
+
+  /* ===== Modal (add tree form) ===== */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(38,48,31,0.45);display:none;
+    align-items:center;justify-content:center;z-index:1000;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal{
+    background:var(--surface);border-radius:12px;box-shadow:var(--shadow);
+    width:420px;max-width:92vw;max-height:88vh;overflow-y:auto;padding:22px;
+  }
+  .modal h3{margin:0 0 4px 0;font-size:19px;}
+  .modal .coord-note{font-size:12px;color:var(--ink-soft);margin-bottom:14px;}
+  .modal .field{margin-bottom:14px;}
+  .modal-actions{display:flex;gap:10px;margin-top:18px;}
+  .row2{display:flex;gap:10px;}
+  .row2 > *{flex:1;}
+
+  /* species picker */
+  .species-picker-btn{
+    width:100%;display:flex;align-items:center;gap:9px;padding:7px 9px;
+    border:1px solid var(--line);border-radius:6px;background:var(--surface-2);text-align:left;
+  }
+  .species-thumb{width:30px;height:30px;border-radius:5px;object-fit:cover;background:var(--line);flex-shrink:0;}
+  .species-picker-btn .placeholder-thumb{width:30px;height:30px;border-radius:5px;background:var(--approved-bg);color:var(--approved);
+    display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+  .species-name-block{display:flex;flex-direction:column;overflow:hidden;}
+  .species-name-block .cn{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .species-name-block .sn{font-size:11.5px;font-style:italic;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  .species-panel{
+    position:absolute;z-index:1100;background:var(--surface);border:1px solid var(--line);border-radius:9px;
+    box-shadow:var(--shadow);width:340px;max-width:88vw;max-height:360px;display:none;flex-direction:column;
+  }
+  .species-panel.show{display:flex;}
+  .species-panel .search{padding:10px;border-bottom:1px solid var(--line);}
+  .species-panel .search input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-size:13px;}
+  .species-list{overflow-y:auto;flex:1;padding:6px;}
+  .species-item{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:6px;}
+  .species-item:hover{background:var(--surface-2);}
+  .species-section-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.5px;color:var(--ink-soft);padding:8px 8px 3px 8px;font-weight:700;}
+
+  /* ===== Teacher table view ===== */
+  .teacher-view{flex:1;overflow-y:auto;padding:22px 26px;}
+  .teacher-toolbar{display:flex;gap:14px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;}
+  .teacher-toolbar .field{margin-bottom:0;width:190px;}
+  table.tree-table{width:100%;border-collapse:collapse;background:var(--surface);border-radius:8px;overflow:hidden;box-shadow:var(--shadow);}
+  table.tree-table th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--ink-soft);
+    background:var(--surface-2);padding:10px 12px;border-bottom:1px solid var(--line);font-weight:700;
+  }
+  table.tree-table td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top;}
+  table.tree-table tr:last-child td{border-bottom:none;}
+  table.tree-table input, table.tree-table select{
+    padding:5px 6px;border:1px solid var(--line);border-radius:5px;font-size:12.5px;width:100%;background:var(--surface-2);
+  }
+  .rowactions{display:flex;gap:6px;flex-wrap:wrap;}
+  .votes-mini{font-size:11px;color:var(--ink-soft);}
+  .empty-state{padding:40px;text-align:center;color:var(--ink-soft);}
+
+  .lb-row{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);
+    border-radius:9px;padding:12px 16px;margin-bottom:10px;box-shadow:var(--shadow);}
+  .lb-row.top1{border-color:var(--gold);background:var(--gold-bg);}
+  .lb-rank{font-family:'Fraunces',serif;font-size:20px;font-weight:700;color:var(--ink-soft);width:34px;text-align:center;flex-shrink:0;}
+  .lb-row.top1 .lb-rank{color:#8A5F0F;}
+  .lb-main{flex:1;min-width:0;}
+  .lb-name{font-weight:700;font-size:14.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lb-sub{font-size:11.5px;color:var(--ink-soft);margin-top:1px;}
+  .lb-bar-track{background:var(--surface-2);border-radius:5px;height:8px;margin-top:7px;overflow:hidden;}
+  .lb-bar-fill{background:var(--moss);height:100%;border-radius:5px;}
+  .lb-row.top1 .lb-bar-fill{background:var(--gold);}
+  .lb-stats{display:flex;gap:16px;flex-shrink:0;}
+  .lb-stat{text-align:right;min-width:78px;}
+  .lb-stat-value{font-weight:700;font-size:14px;color:var(--moss-dark);}
+  .lb-stat-label{font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.3px;}
+  .gate{max-width:340px;margin:60px auto;text-align:center;background:var(--surface);padding:28px;border-radius:10px;box-shadow:var(--shadow);}
+  .gate input{width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;margin:12px 0;text-align:center;font-size:14px;}
+  .gate .hint{font-size:11.5px;color:var(--ink-soft);margin-top:12px;}
+
+  /* ===== Mobile layout (phones) =====
+     Below this width there isn't room for the sidebar and the map side by
+     side, so the sidebar becomes a slide-out panel, and the tree-detail
+     drawer becomes a bottom sheet instead of a fixed-width side panel —
+     otherwise it has nowhere to go but over the whole map. */
+  @media (max-width: 760px){
+    .brand .sub{display:none;}
+    .brand h1{font-size:18px;}
+    .roletabs button{padding:7px 11px;font-size:12.5px;}
+
+    .sidebar-toggle-btn{display:block;}
+
+    .sidebar{
+      position:fixed;top:0;bottom:0;left:0;z-index:350;
+      width:82vw;max-width:320px;
+      transform:translateX(-100%);
+      transition:transform .25s ease;
+      padding-top:calc(18px + env(safe-area-inset-top,0px));
+      padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));
+    }
+    .sidebar.open{transform:translateX(0);}
+
+    .drawer{
+      top:auto;left:0;right:0;bottom:0;width:100%;
+      max-height:65vh;border-radius:16px 16px 0 0;
+      padding-bottom:env(safe-area-inset-bottom,0px);
+    }
+    .drawer-head{border-radius:16px 16px 0 0;}
+    .drawer-head::before{
+      content:'';display:block;width:36px;height:4px;border-radius:3px;
+      background:var(--line);margin:0 auto 10px auto;
+    }
+
+    .modal{width:92vw;}
+    .teacher-toolbar{flex-direction:column;align-items:stretch;}
+    .teacher-toolbar .field{width:100%;}
+    table.tree-table{font-size:12px;}
+    .lb-stats{gap:10px;}
+    .lb-stat{min-width:60px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="leafmark">🌳</span>
+    <h1>Understory</h1>
+    <span class="sub">WRDSB Schoolyard Tree Map</span>
+  </div>
+  <div class="roletabs">
+    <button id="tabStudent" class="active">Student</button>
+    <button id="tabLeaderboard">Leaderboard</button>
+    <button id="tabTeacher">Teacher</button>
+  </div>
+</div>
+
+<div class="status-banner offline" id="offlineBanner">
+  📴 You're offline — you can still browse cached trees, suggest new ones, and vote. Everything will sync automatically once you're back online.
+</div>
+<div class="status-banner setup" id="setupBanner">
+  ⚠️ This app isn't connected to a Google Sheet yet. A developer needs to add the Apps Script URL in <code>index.html</code> — see README.md for setup steps.
+</div>
+
+<div class="app">
+
+  <!-- STUDENT VIEW -->
+  <div id="studentView" style="display:flex;flex:1;min-height:0;">
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+    <div class="sidebar" id="sidebar">
+      <h2>Legend</h2>
+      <div class="legend">
+        <div class="legend-row"><span class="dot suggested"></span> Suggested — open for votes</div>
+        <div class="legend-row"><span class="dot approved"></span> Approved by a teacher</div>
+      </div>
+
+      <h2>Filters</h2>
+      <div class="field">
+        <label for="fStatus">Status</label>
+        <select id="fStatus">
+          <option value="all">All trees</option>
+          <option value="suggested">Suggested</option>
+          <option value="approved">Approved</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="fSchool">School</label>
+        <select id="fSchool"><option value="all">All schools</option></select>
+      </div>
+      <div class="field">
+        <label for="fSpecies">Species</label>
+        <select id="fSpecies"><option value="all">All species</option></select>
+      </div>
+
+      <button class="btn" id="startAddBtn">+ Suggest a tree</button>
+
+      <div class="stat-line" id="statLine"></div>
+      <div class="impact-box" id="impactBox"></div>
+    </div>
+
+    <div class="mapwrap">
+      <button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn">☰ Filters</button>
+      <div class="map-controls-extra">
+        <button type="button" class="map-ctrl-btn" id="basemapToggleBtn">🛰️ Satellite</button>
+        <button type="button" class="map-ctrl-btn" id="locateBtn" title="Show my location">📍 My location</button>
+      </div>
+      <div id="map"></div>
+      <div class="map-banner" id="addmodeBanner">Tap anywhere on the map to drop a pin for the tree you're logging.
+        <div style="margin-top:8px;"><button class="btn secondary small" id="cancelAddBtn">Cancel</button></div>
+      </div>
+      <div class="map-banner" id="correctionBanner">Tap the map to show where you think this tree actually is.
+        <div style="margin-top:8px;"><button class="btn secondary small" id="cancelCorrectionLocationBtn">Cancel</button></div>
+      </div>
+      <div class="drawer" id="drawer"></div>
+    </div>
+  </div>
+
+  <!-- LEADERBOARD VIEW -->
+  <div id="leaderboardView" style="display:none;flex:1;min-height:0;overflow-y:auto;">
+    <div class="teacher-view">
+      <h2 class="serif" style="margin-top:0;">School leaderboard</h2>
+      <p style="font-size:13px;color:var(--ink-soft);max-width:640px;margin-top:-6px;">
+        Ranked by estimated CO₂ absorbed per year, based on every logged tree's species, height and diameter.
+      </p>
+      <div class="teacher-toolbar">
+        <div class="field">
+          <label>Include</label>
+          <select id="lStatus">
+            <option value="all">All trees</option>
+            <option value="suggested">Suggested only</option>
+            <option value="approved">Approved only</option>
+          </select>
+        </div>
+      </div>
+      <div id="leaderboardWrap"></div>
+    </div>
+  </div>
+
+  <!-- TEACHER VIEW -->
+  <div id="teacherView" style="display:none;flex:1;min-height:0;overflow-y:auto;">
+    <div id="teacherGate" class="gate">
+      <h3 class="serif">Teacher access</h3>
+      <p style="font-size:13px;color:var(--ink-soft);">Enter the class passcode to edit, approve, or remove tree suggestions.</p>
+      <input type="password" id="teacherPass" placeholder="Passcode">
+      <button class="btn" id="teacherEnterBtn">Enter teacher view</button>
+      <div class="hint">Default passcode: <strong>wrdsb-trees</strong>. This is a lightweight classroom gate, not secure authentication — change the value in the code before wider use.</div>
+    </div>
+    <div id="teacherPanel" class="teacher-view" style="display:none;">
+      <h2 class="serif" style="margin-top:0;">Manage tree suggestions</h2>
+      <div class="teacher-toolbar">
+        <div class="field">
+          <label>Status</label>
+          <select id="tStatus">
+            <option value="all">All trees</option>
+            <option value="suggested">Suggested</option>
+            <option value="approved">Approved</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>School</label>
+          <select id="tSchool"><option value="all">All schools</option></select>
+        </div>
+        <div class="field">
+          <label>Species</label>
+          <select id="tSpecies"><option value="all">All species</option></select>
+        </div>
+      </div>
+      <div id="tableWrap"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Add tree modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 class="serif">Log a tree</h3>
+    <div class="coord-note" id="coordNote"></div>
+    <div class="field">
+      <label>School</label>
+      <select id="mSchool"></select>
+    </div>
+    <div class="field">
+      <label>Species</label>
+      <button type="button" class="species-picker-btn" id="mSpeciesBtn">
+        <span class="placeholder-thumb">🍃</span>
+        <span class="species-name-block"><span class="cn">Choose a species…</span></span>
+      </button>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Height (m)</label>
+        <input type="number" id="mHeight" min="0" step="0.1" placeholder="e.g. 6.5">
+      </div>
+      <div class="field">
+        <label>Diameter at breast height (cm)</label>
+        <input type="number" id="mDiameter" min="0" step="0.5" placeholder="e.g. 24">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="cancelModalBtn" style="flex:1;">Cancel</button>
+      <button class="btn" id="submitTreeBtn" style="flex:1;">Suggest tree</button>
+    </div>
+  </div>
+</div>
+
+<!-- Correction modal (species / height / diameter disagreements) -->
+<div class="modal-overlay" id="correctionOverlay">
+  <div class="modal">
+    <h3 class="serif" id="correctionTitle">Suggest a correction</h3>
+    <p class="coord-note">Your suggestion is added to what others have proposed, and shown on the tree's card.</p>
+    <div class="field" id="correctionFieldWrap"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="cancelCorrectionBtn" style="flex:1;">Cancel</button>
+      <button class="btn" id="submitCorrectionBtn" style="flex:1;">Submit correction</button>
+    </div>
+  </div>
+</div>
+
+<!-- Species picker panel (positioned dynamically) -->
+<div class="species-panel" id="speciesPanel">
+  <div class="search"><input type="text" id="speciesSearch" placeholder="Search species (e.g. maple, oak)…"></div>
+  <div class="species-list" id="speciesList"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script type="module">
+/* ============================================================
+   GOOGLE SHEET BACKEND SETUP
+   ------------------------------------------------------------
+   STEP 1 (required): create a Google Sheet, attach the provided
+   Apps Script (Code.gs) to it, deploy it as a Web App, and paste
+   the deployment URL below. See README.md for the full walkthrough.
+   ============================================================ */
+const APPS_SCRIPT_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL";
+
+// How often each open tab quietly re-checks the sheet for changes made by
+// other students/teachers. Longer = fewer requests against Apps Script's
+// daily quota; shorter = other people's changes show up faster.
+const POLL_INTERVAL_MS = 20000;
+
+const SHEETS_CONFIGURED = !APPS_SCRIPT_URL.includes("YOUR_");
+let SHEETS_READY = false; // true once the first successful load from the sheet completes
+let pollTimer = null;
+
+function initBackend(){
+  if(!SHEETS_CONFIGURED){
+    document.getElementById('setupBanner').classList.add('show');
+    return;
+  }
+  loadCachedTrees();       // show whatever we last saw, instantly, even offline
+  refreshFromServer();     // then try to get the latest
+  flushPendingActions();   // and try to send anything queued from being offline
+  if(pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(()=>{ flushPendingActions(); refreshFromServer(); }, POLL_INTERVAL_MS);
+}
+
+/* ============================================================
+   VIEWPORT HEIGHT FIX (mobile browsers miscalculate 100vh
+   because of the address bar; this keeps the map full-height
+   on phones) + SERVICE WORKER for offline app loading
+   ============================================================ */
+function setViewportHeightVar(){
+  document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px');
+}
+setViewportHeightVar();
+window.addEventListener('resize', setViewportHeightVar);
+window.addEventListener('orientationchange', setViewportHeightVar);
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('Service worker registration failed:', err));
+  });
+}
+
+/* ============================================================
+   CONNECTION STATUS BANNER
+   ============================================================ */
+function updateOfflineBanner(){
+  document.getElementById('offlineBanner').classList.toggle('show', !navigator.onLine);
+}
+window.addEventListener('online', ()=>{ updateOfflineBanner(); flushPendingActions(); refreshFromServer(); });
+window.addEventListener('offline', updateOfflineBanner);
+updateOfflineBanner();
+
+/* ============================================================
+   CONFIG / STATIC DATA
+   ============================================================ */
+const TEACHER_PASSCODE = "wrdsb-trees";
+
+const SCHOOLS = {
+  "Elementary Schools": [
+    "Abraham Erb Public School","Alpine Public School","Avenue Road Public School","Ayr Public School",
+    "Baden Public School","Blair Road Public School","Blue Heron Public School","Breslau Public School",
+    "Bridgeport Public School","Brigadoon Public School","Cedar Creek Public School","Cedarbrae Public School",
+    "Centennial Public School (Cambridge)","Centennial Public School (Waterloo)","Central Public School",
+    "Chalmers Street Public School","Chicopee Hills Public School","Clemens Mill Public School",
+    "Conestogo Public School","Coronation Public School","Country Hills Public School",
+    "Courtland Senior Public School","Crestview Public School","Doon Public School",
+    "Driftwood Park Public School","Edna Staebler Public School","Elgin Street Public School",
+    "Elizabeth Ziegler Public School","Empire Public School","Floradale Public School",
+    "Forest Glen Public School","Forest Hill Public School","Franklin Public School",
+    "Giinawind Public School","Glencairn Public School","Grand View Public School (Cambridge)",
+    "Grandview Public School (New Hamburg)","Groh Public School","Hespeler Public School",
+    "Highland Public School","Hillcrest Public School","Hillside Public School",
+    "Howard Robertson Public School","J F Carmichael Public School","J W Gerth Public School",
+    "Janet Metcalfe Public School","Jean Steckle Public School","John Darling Public School",
+    "John Mahood Junior Public School","Keatsway Public School","King Edward Public School",
+    "Lackner Woods Public School","Laurelwood Public School","Laurentian Senior Public School",
+    "Lester B Pearson Public School","Lexington Public School","Lincoln Heights Public School",
+    "Linwood District Public School","MacGregor Senior Public School","Mackenzie King Public School",
+    "Manchester Public School","Margaret Avenue Senior Public School","Mary Johnston Public School",
+    "Meadowlane Public School","Millen Woods Public School","Moffat Creek Public School",
+    "N A MacEachern Public School","New Dundee Public School","Northlake Woods Public School",
+    "Oak Creek Public School","Park Manor Senior Public School","Parkway Public School",
+    "Pioneer Park Public School","Preston Public School","Prueter Public School",
+    "Queen Elizabeth Public School","Queensmount Senior Public School","Riverside Public School",
+    "Rockway Public School","Rosemount School","Saginaw Public School","Sandhills Public School",
+    "Sandowne Public School","Sheppard Public School","Silverheights Public School",
+    "Sir Adam Beck Public School","Smithson Public School","Southridge Public School",
+    "St Andrew's Senior Public School","St Jacobs Public School","Stanley Park Senior Public School",
+    "Stewart Avenue Public School","Suddaby Public School","Sunnyside Senior Public School",
+    "Tait Street Public School","Trillium Public School","Vista Hills Public School",
+    "W T Townshend Public School","Wellesley Public School","Westheights Public School",
+    "Westmount Public School","Westvale Public School","William G Davis Public School",
+    "Williamsburg Public School","Willow River Public School","Wilson Avenue Public School",
+    "Winston Churchill Public School","Woodland Park Public School"
+  ],
+  "Secondary Schools": [
+    "Bluevale Collegiate Institute","Cameron Heights Collegiate Institute","Eastwood Collegiate Institute",
+    "Elmira District Secondary School","Forest Heights Collegiate Institute",
+    "Galt Collegiate Institute & Vocational School","Glenview Park Secondary School",
+    "Grand River Collegiate Institute","Huron Heights Secondary School","Jacob Hespeler Secondary School",
+    "Kitchener-Waterloo Collegiate & Vocational School","Laurel Heights Secondary School",
+    "Preston High School","Southwood Secondary School","Waterloo Collegiate Institute",
+    "Waterloo-Oxford District Secondary School"
+  ],
+  "Outdoor & Environmental Education Centres": [
+    "Blair Outdoor and Environmental Education Centre","Camp Heidelberg Outdoor and Environmental Education Centre",
+    "Huron Natural Area Outdoor Environmental Education Centre","Laurel Creek Conservation Area",
+    "Wrigley Corners Outdoor and Environmental Education Centre"
+  ],
+  "Other WRDSB Sites": [
+    "Choices for Youth Cambridge","Choices for Youth Waterloo","UTurn Cambridge","UTurn Waterloo"
+  ]
+};
+const ALL_SCHOOL_NAMES = Object.values(SCHOOLS).flat();
+
+// Curated list, roughly ordered by how commonly the species is found on
+// Waterloo Region schoolyards and streets (native canopy + common urban plantings).
+// growth: typical DBH growth-rate class (slow/medium/fast), used to estimate age and
+// annual sequestration. leaf: 'broadleaf' or 'conifer', used to estimate canopy shape
+// and root allocation. density: average oven-dry wood specific gravity (g/cm³, from
+// published wood-density references), used to scale biomass by tree type.
+// These are educational approximations, not species-specific scientific measurements.
+const CURATED_SPECIES = [
+  ["Sugar Maple","Acer saccharum","slow","broadleaf",0.56],
+  ["Red Maple","Acer rubrum","medium","broadleaf",0.49],
+  ["Silver Maple","Acer saccharinum","fast","broadleaf",0.44],
+  ["Norway Maple","Acer platanoides","medium","broadleaf",0.55],
+  ["Manitoba Maple","Acer negundo","fast","broadleaf",0.42],
+  ["White Ash","Fraxinus americana","medium","broadleaf",0.55],
+  ["Green Ash","Fraxinus pennsylvanica","fast","broadleaf",0.53],
+  ["Eastern White Cedar","Thuja occidentalis","slow","conifer",0.29],
+  ["Eastern White Pine","Pinus strobus","medium","conifer",0.34],
+  ["Norway Spruce","Picea abies","medium","conifer",0.38],
+  ["White Spruce","Picea glauca","slow","conifer",0.33],
+  ["Colorado Blue Spruce","Picea pungens","slow","conifer",0.35],
+  ["Eastern Hemlock","Tsuga canadensis","slow","conifer",0.38],
+  ["Red Oak","Quercus rubra","medium","broadleaf",0.56],
+  ["White Oak","Quercus alba","slow","broadleaf",0.60],
+  ["Bur Oak","Quercus macrocarpa","slow","broadleaf",0.58],
+  ["American Beech","Fagus grandifolia","slow","broadleaf",0.56],
+  ["American Basswood","Tilia americana","medium","broadleaf",0.32],
+  ["Littleleaf Linden","Tilia cordata","medium","broadleaf",0.34],
+  ["Trembling Aspen","Populus tremuloides","fast","broadleaf",0.35],
+  ["Eastern Cottonwood","Populus deltoides","fast","broadleaf",0.37],
+  ["Paper Birch","Betula papyrifera","fast","broadleaf",0.48],
+  ["Black Walnut","Juglans nigra","medium","broadleaf",0.51],
+  ["Shagbark Hickory","Carya ovata","slow","broadleaf",0.64],
+  ["Black Cherry","Prunus serotina","medium","broadleaf",0.47],
+  ["Honey Locust","Gleditsia triacanthos","fast","broadleaf",0.60],
+  ["American Elm","Ulmus americana","fast","broadleaf",0.46],
+  ["Eastern Redbud","Cercis canadensis","medium","broadleaf",0.55],
+  ["Serviceberry","Amelanchier canadensis","medium","broadleaf",0.66],
+  ["Crabapple","Malus","medium","broadleaf",0.61],
+  ["London Planetree","Platanus x acerifolia","fast","broadleaf",0.46],
+  ["Ginkgo","Ginkgo biloba","slow","broadleaf",0.36],
+  ["Tamarack","Larix laricina","fast","conifer",0.49],
+  ["Blue Beech","Carpinus caroliniana","slow","broadleaf",0.65]
+].map(([cn,sn,growth,leaf,density])=>({commonName:cn, scientificName:sn, growth:growth, leaf:leaf, density:density}));
+
+/* ============================================================
+   ECOLOGICAL FUNCTION ESTIMATES
+   Formulas are simplified, widely used urban-forestry education
+   approximations (not a substitute for professional tree inventory
+   tools like i-Tree). They're meant to give students a reasonable,
+   explainable order-of-magnitude sense of what a tree is doing.
+   ============================================================ */
+const GROWTH_RATES = { // annual growth assumptions
+  slow:   {dbhCm: 0.3, heightM: 0.15},
+  medium: {dbhCm: 0.6, heightM: 0.30},
+  fast:   {dbhCm: 1.0, heightM: 0.45}
+};
+
+// Baseline wood density the classic D/H biomass coefficients (0.25 / 0.15) were
+// implicitly calibrated against — a mid-density temperate hardwood. Species with
+// denser wood (oak, hickory) scale up from this baseline; lighter woods (pine,
+// cedar, basswood) scale down, which is how "tree type" is factored into biomass.
+const BASELINE_DENSITY = 0.50;
+
+// Above-ground green weight (kg) from DBH (cm) and height (m), using the classic
+// DBH/height biomass approximation, scaled by this species' wood density relative
+// to the baseline, then converted through green->dry->carbon->CO2 ratios. Root
+// biomass is added as a fraction of aboveground weight that differs slightly by
+// tree type (conifers typically allocate a bit more to roots than broadleaves).
+function co2StoredForSize(dbhCm, heightM, densityMultiplier, rootFraction){
+  if(dbhCm<=0 || heightM<=0) return 0;
+  const dIn = dbhCm / 2.54;
+  const hFt = heightM * 3.2808;
+  const coeff = dIn <= 11 ? 0.25 : 0.15;
+  const baseGreenWeightLbs = coeff * dIn * dIn * hFt;       // generic above-ground weight, average-density tree
+  const greenWeightLbs = baseGreenWeightLbs * densityMultiplier; // scaled for this species' wood density
+  const totalGreenLbs = greenWeightLbs * (1 + rootFraction);     // + roots
+  const dryWeightLbs = totalGreenLbs * 0.72;               // ~72% dry matter
+  const carbonLbs = dryWeightLbs * 0.5;                    // ~50% of dry weight is carbon
+  const co2Lbs = carbonLbs * 3.67;                         // C -> CO2 (molecular weight ratio 44/12)
+  return co2Lbs * 0.453592;                                // lbs -> kg
+}
+
+function densityLabel(leaf, density){
+  if(leaf==='conifer') return 'softwood / conifer';
+  if(density >= 0.55) return 'dense hardwood';
+  if(density >= 0.45) return 'medium-density hardwood';
+  return 'light hardwood';
+}
+
+function computeEcology(tree){
+  const growth = GROWTH_RATES[tree.growth] ? tree.growth : 'medium';
+  const leaf = tree.leaf === 'conifer' ? 'conifer' : 'broadleaf';
+  const density = tree.density || BASELINE_DENSITY;
+  const densityMultiplier = density / BASELINE_DENSITY;
+  const rootFraction = leaf === 'conifer' ? 0.25 : 0.20;
+  const rate = GROWTH_RATES[growth];
+  const D = tree.diameter, H = tree.height;
+
+  const co2Lifetime = co2StoredForSize(D, H, densityMultiplier, rootFraction);
+  const prevD = Math.max(0.1, D - rate.dbhCm);
+  const prevH = Math.max(0.1, H - rate.heightM);
+  const co2Annual = Math.max(0, co2Lifetime - co2StoredForSize(prevD, prevH, densityMultiplier, rootFraction));
+
+  const o2Lifetime = co2Lifetime * 0.727; // stoichiometric CO2->O2 mass ratio (32/44)
+  const o2Annual = co2Annual * 0.727;
+
+  const ageYears = Math.max(1, Math.round(D / rate.dbhCm));
+
+  const spreadRatio = leaf === 'conifer' ? 0.4 : 0.65; // typical open-grown crown-spread:height ratio
+  const canopySpreadM = H * spreadRatio;
+  const shadeAreaM2 = Math.PI * Math.pow(canopySpreadM/2, 2);
+
+  const carKm = co2Lifetime / 0.15; // ~150 g CO2/km, a commonly used average passenger car figure
+
+  return {ageYears, co2Lifetime, co2Annual, o2Lifetime, o2Annual, canopySpreadM, shadeAreaM2, carKm,
+    density, densityCategory: densityLabel(leaf, density)};
+}
+
+function fmt(n, decimals){
+  if(!isFinite(n)) return '0';
+  return n.toLocaleString(undefined, {minimumFractionDigits:decimals, maximumFractionDigits:decimals});
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let trees = [];
+let myVotes = {};
+let role = "student";
+let teacherUnlocked = false;
+let addMode = false;
+let draftLatLng = null;
+let selectedTreeId = null;
+let map, markersLayer;
+const markerById = {};
+const speciesPhotoCache = {}; // scientificName -> {photoUrl, commonName}
+let speciesPanelTarget = null; // 'modal' only for now
+let pendingSpecies = null; // {commonName, scientificName, photoUrl}
+
+/* ============================================================
+   STORAGE (Google Sheet via Apps Script, polling + offline queue)
+   ------------------------------------------------------------
+   There's no push-based realtime here (a static site talking to a
+   Sheet can't do that), so instead:
+   - The full tree list is re-fetched every POLL_INTERVAL_MS, plus
+     right after any action this tab takes, so changes from other
+     people show up within a poll cycle.
+   - Every fetch result is cached to localStorage, so re-opening the
+     app offline still shows the last known map.
+   - Actions taken offline (suggest a tree, vote, teacher edits) are
+     queued as small *delta* events (e.g. "+1 agree on species"),
+     not full record overwrites — that way, syncing later can't
+     silently clobber someone else's change to the same tree; it
+     just replays the same edit against whatever the sheet currently
+     holds, the same way the live version would have applied it.
+   ============================================================ */
+const TREES_CACHE_KEY = 'understory-trees-cache';
+const QUEUE_KEY = 'understory-pending-actions';
+
+function loadCachedTrees(){
+  try{
+    const cached = JSON.parse(localStorage.getItem(TREES_CACHE_KEY) || '[]');
+    if(Array.isArray(cached) && cached.length){
+      trees = cached;
+      refreshAll();
+    }
+  }catch(e){ /* ignore bad cache */ }
+}
+function cacheTrees(){
+  try{ localStorage.setItem(TREES_CACHE_KEY, JSON.stringify(trees)); }
+  catch(e){ /* storage full or unavailable — non-fatal */ }
+}
+
+async function refreshFromServer(){
+  if(!SHEETS_CONFIGURED) return;
+  try{
+    const res = await fetch(APPS_SCRIPT_URL + '?action=list', { method:'GET' });
+    const data = await res.json();
+    if(Array.isArray(data.trees)){
+      trees = data.trees.map(normalizeTree);
+      cacheTrees();
+      SHEETS_READY = true;
+      refreshAll();
+    }
+  }catch(e){
+    // Offline or the sheet is briefly unreachable — the cached copy already
+    // rendered, and we'll try again on the next poll / when back online.
+    console.warn('Could not reach the sheet (offline?):', e);
+  }
+}
+
+function normalizeTree(t){
+  t.votes = t.votes || blankVotes();
+  ['location','species','height','diameter'].forEach(attr=>{
+    const b = t.votes[attr] || {};
+    t.votes[attr] = { agree: Number(b.agree)||0, alternatives: Array.isArray(b.alternatives) ? b.alternatives : [] };
+  });
+  t.height = Number(t.height);
+  t.diameter = Number(t.diameter);
+  t.lat = Number(t.lat);
+  t.lng = Number(t.lng);
+  return t;
+}
+
+function getQueue(){
+  try{ return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function setQueue(q){
+  try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+  catch(e){ /* ignore */ }
+}
+
+// Try an action immediately; if the network call fails, queue it for later
+// instead of losing it. `action` is a plain object matching what Code.gs
+// expects, e.g. {type:'vote', treeId, attr, choice}.
+async function sendAction(action){
+  if(!SHEETS_CONFIGURED) return false;
+  try{
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight Apps Script can't handle
+      body: JSON.stringify(action)
+    });
+    if(!res.ok) throw new Error('server returned ' + res.status);
+    refreshFromServer();
+    return true;
+  }catch(e){
+    const q = getQueue();
+    q.push(action);
+    setQueue(q);
+    return false;
+  }
+}
+
+async function flushPendingActions(){
+  if(!SHEETS_CONFIGURED || !navigator.onLine) return;
+  let q = getQueue();
+  if(!q.length) return;
+  while(q.length){
+    const action = q[0];
+    try{
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(action)
+      });
+      if(!res.ok) throw new Error('server returned ' + res.status);
+      q.shift();
+      setQueue(q);
+    }catch(e){
+      break; // still offline / sheet unreachable — stop and retry next time
+    }
+  }
+  refreshFromServer();
+}
+
+// Per-device vote tracking (not tied to a login system — each student's
+// own phone/browser remembers what it has voted on, stored locally so it
+// also works offline).
+function loadMyVotes(){
+  try{ myVotes = JSON.parse(localStorage.getItem('understory-my-votes') || '{}'); }
+  catch(e){ myVotes = {}; }
+}
+function saveMyVotes(){
+  try{ localStorage.setItem('understory-my-votes', JSON.stringify(myVotes)); }
+  catch(e){ console.error('save votes failed', e); }
+}
+
+function newTreeId(){
+  return 't_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+}
+function blankVotes(){
+  return {
+    location:{agree:0,alternatives:[]},
+    species:{agree:0,alternatives:[]},
+    height:{agree:0,alternatives:[]},
+    diameter:{agree:0,alternatives:[]}
+  };
+}
+
+// A stable key identifying a *distinct* alternative value, so repeated
+// suggestions of "the same" correction tally together instead of each
+// showing up as its own separate entry.
+function altKey(attr, raw){
+  if(attr === 'species') return raw.scientificName;
+  if(attr === 'location') return raw.lat.toFixed(4) + ',' + raw.lng.toFixed(4);
+  return Number(raw).toFixed(1); // height / diameter
+}
+
+// Remove one vote (an agree, or one count off a specific alternative) from
+// a tree's votes[attr] bucket. `entry` is {kind:'agree'} or {kind:'alt', key}.
+function decrementVoteEntry(bucket, entry){
+  if(!entry) return;
+  if(entry.kind === 'agree'){
+    bucket.agree = Math.max(0, (bucket.agree||0) - 1);
+    return;
+  }
+  const alt = bucket.alternatives.find(a => a.key === entry.key);
+  if(alt){
+    alt.count = Math.max(0, alt.count - 1);
+    if(alt.count === 0){
+      bucket.alternatives = bucket.alternatives.filter(a => a !== alt);
+    }
+  }
+}
+// Add one vote (an agree, or one count on a specific alternative, creating
+// it if it's new) to a tree's votes[attr] bucket.
+function incrementVoteEntry(bucket, entry){
+  if(!entry) return;
+  if(entry.kind === 'agree'){
+    bucket.agree = (bucket.agree||0) + 1;
+    return;
+  }
+  let alt = bucket.alternatives.find(a => a.key === entry.key);
+  if(!alt){
+    alt = { key: entry.key, raw: entry.raw, count: 0 };
+    bucket.alternatives.push(alt);
+  }
+  alt.count += 1;
+}
+
+/* ============================================================
+   iNATURALIST LOOKUP
+   ============================================================ */
+async function fetchSpeciesPhoto(scientificName){
+  if(speciesPhotoCache[scientificName]) return speciesPhotoCache[scientificName];
+  try{
+    const url = 'https://api.inaturalist.org/v1/taxa?q=' + encodeURIComponent(scientificName) + '&rank=species&per_page=1';
+    const res = await fetch(url);
+    const data = await res.json();
+    const t = data.results && data.results[0];
+    const photoUrl = t && t.default_photo ? (t.default_photo.square_url || t.default_photo.medium_url) : null;
+    const commonName = t && t.preferred_common_name ? t.preferred_common_name : null;
+    const entry = {photoUrl, commonName};
+    speciesPhotoCache[scientificName] = entry;
+    return entry;
+  }catch(e){
+    const entry = {photoUrl:null, commonName:null};
+    speciesPhotoCache[scientificName] = entry;
+    return entry;
+  }
+}
+
+async function searchINatSpecies(query){
+  try{
+    const url = 'https://api.inaturalist.org/v1/taxa?q=' + encodeURIComponent(query) + '&rank=species&per_page=12';
+    const res = await fetch(url);
+    const data = await res.json();
+    return (data.results||[]).map(t=>({
+      commonName: t.preferred_common_name || t.name,
+      scientificName: t.name,
+      photoUrl: t.default_photo ? (t.default_photo.square_url || t.default_photo.medium_url) : null
+    }));
+  }catch(e){ return []; }
+}
+
+/* ============================================================
+   MAP
+   ============================================================ */
+let streetLayer, satelliteLayer, locationMarker, locationAccuracyCircle, locating = false;
+
+function initMap(){
+  map = L.map('map', {zoomControl:true}).setView([43.4550, -80.4750], 11);
+
+  streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
+  });
+
+  markersLayer = L.layerGroup().addTo(map);
+
+  map.on('click', function(e){
+    if(correctionLocationTarget){
+      const treeId = correctionLocationTarget;
+      correctionLocationTarget = null;
+      document.getElementById('map').classList.remove('addmode');
+      document.getElementById('correctionBanner').classList.remove('show');
+      submitAlternative(treeId, 'location', { lat: e.latlng.lat, lng: e.latlng.lng });
+      selectedTreeId = treeId;
+      renderDrawer();
+      return;
+    }
+    if(!addMode) return;
+    draftLatLng = e.latlng;
+    addMode = false;
+    document.getElementById('map').classList.remove('addmode');
+    document.getElementById('addmodeBanner').classList.remove('show');
+    openAddModal();
+  });
+
+  map.on('locationfound', function(e){
+    const icon = L.divIcon({
+      className:'',
+      html:'<div class="you-are-here"><div class="yah-dot"></div><div class="yah-pulse"></div></div>',
+      iconSize:[22,22], iconAnchor:[11,11]
+    });
+    if(!locationMarker){
+      locationMarker = L.marker(e.latlng, {icon, zIndexOffset: 1000}).addTo(map);
+    } else {
+      locationMarker.setLatLng(e.latlng);
+    }
+    if(e.accuracy){
+      if(!locationAccuracyCircle){
+        locationAccuracyCircle = L.circle(e.latlng, {radius:e.accuracy, color:'#4C6B3F', weight:1, fillColor:'#4C6B3F', fillOpacity:0.12}).addTo(map);
+      } else {
+        locationAccuracyCircle.setLatLng(e.latlng).setRadius(e.accuracy);
+      }
+    }
+  });
+  map.on('locationerror', function(e){
+    locating = false;
+    document.getElementById('locateBtn').classList.remove('active');
+    alert("Couldn't find your location: " + e.message + '\n\nMake sure location access is allowed for this site.');
+  });
+}
+
+function toggleBasemap(){
+  const btn = document.getElementById('basemapToggleBtn');
+  if(map.hasLayer(satelliteLayer)){
+    map.removeLayer(satelliteLayer);
+    map.addLayer(streetLayer);
+    btn.textContent = '🛰️ Satellite';
+  } else {
+    map.removeLayer(streetLayer);
+    map.addLayer(satelliteLayer);
+    btn.textContent = '🗺️ Street map';
+  }
+}
+
+function toggleLocate(){
+  const btn = document.getElementById('locateBtn');
+  if(locating){
+    map.stopLocate();
+    locating = false;
+    btn.classList.remove('active');
+  } else {
+    locating = true;
+    btn.classList.add('active');
+    map.locate({ setView:true, maxZoom:17, watch:true, enableHighAccuracy:true });
+  }
+}
+
+function leafDivIcon(status, netLabel){
+  const cls = status === 'approved' ? 'approved' : (status === 'draft' ? 'draft' : 'suggested');
+  return L.divIcon({
+    className:'',
+    html: '<div class="leaf-badge ' + cls + '"><span>' + netLabel + '</span></div>',
+    iconSize:[30,30],
+    iconAnchor:[15,26]
+  });
+}
+
+function netLocationLabel(tree){
+  if(tree.status === 'approved') return '✓';
+  const v = tree.votes.location;
+  const disagreeTotal = (v.alternatives||[]).reduce((s,a)=>s+a.count,0);
+  const net = (v.agree||0) - disagreeTotal;
+  return (net>0?'+':'') + net;
+}
+
+function renderMarkers(){
+  markersLayer.clearLayers();
+  for(const k in markerById) delete markerById[k];
+  const filtered = filteredTrees();
+  filtered.forEach(tree=>{
+    const marker = L.marker([tree.lat, tree.lng], {icon: leafDivIcon(tree.status, netLocationLabel(tree))});
+    marker.on('click', ()=>{ selectedTreeId = tree.id; closeSidebar(); renderDrawer(); });
+    marker.addTo(markersLayer);
+    markerById[tree.id] = marker;
+  });
+  updateStatLine(filtered);
+}
+
+/* ============================================================
+   FILTERS
+   ============================================================ */
+function populateFilterOptions(){
+  const schoolSelects = [document.getElementById('fSchool'), document.getElementById('tSchool'), document.getElementById('mSchool')];
+  schoolSelects.forEach(sel=>{
+    if(!sel) return;
+    const isFilter = sel.id !== 'mSchool';
+    sel.innerHTML = isFilter ? '<option value="all">All schools</option>' : '';
+    Object.entries(SCHOOLS).forEach(([group, names])=>{
+      const og = document.createElement('optgroup');
+      og.label = group;
+      names.forEach(n=>{
+        const opt = document.createElement('option');
+        opt.value = n; opt.textContent = n;
+        og.appendChild(opt);
+      });
+      sel.appendChild(og);
+    });
+  });
+
+  const speciesNames = Array.from(new Set(trees.map(t=>t.species))).sort();
+  [document.getElementById('fSpecies'), document.getElementById('tSpecies')].forEach(sel=>{
+    if(!sel) return;
+    sel.innerHTML = '<option value="all">All species</option>';
+    speciesNames.forEach(n=>{
+      const opt = document.createElement('option');
+      opt.value = n; opt.textContent = n;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function currentFilters(prefix){
+  return {
+    status: document.getElementById(prefix+'Status').value,
+    school: document.getElementById(prefix+'School').value,
+    species: document.getElementById(prefix+'Species').value
+  };
+}
+
+function filteredTrees(){
+  const f = currentFilters('f');
+  return trees.filter(t=>{
+    if(f.status!=='all' && t.status!==f.status) return false;
+    if(f.school!=='all' && t.school!==f.school) return false;
+    if(f.species!=='all' && t.species!==f.species) return false;
+    return true;
+  });
+}
+function teacherFilteredTrees(){
+  const f = currentFilters('t');
+  return trees.filter(t=>{
+    if(f.status!=='all' && t.status!==f.status) return false;
+    if(f.school!=='all' && t.school!==f.school) return false;
+    if(f.species!=='all' && t.species!==f.species) return false;
+    return true;
+  });
+}
+
+function updateStatLine(filtered){
+  const suggested = filtered.filter(t=>t.status==='suggested').length;
+  const approved = filtered.filter(t=>t.status==='approved').length;
+  document.getElementById('statLine').textContent =
+    filtered.length + ' tree' + (filtered.length===1?'':'s') + ' shown — ' + suggested + ' suggested, ' + approved + ' approved';
+
+  const box = document.getElementById('impactBox');
+  if(!filtered.length){ box.innerHTML = ''; return; }
+  let co2Annual = 0, o2Annual = 0, shade = 0;
+  filtered.forEach(t=>{
+    const eco = computeEcology(t);
+    co2Annual += eco.co2Annual;
+    o2Annual += eco.o2Annual;
+    shade += eco.shadeAreaM2;
+  });
+  box.innerHTML =
+    '<div class="impact-title">Combined impact of these trees</div>' +
+    '<div class="impact-line">🌍 ' + fmt(co2Annual,0) + ' kg CO₂ absorbed / year</div>' +
+    '<div class="impact-line">💨 ' + fmt(o2Annual,0) + ' kg O₂ released / year</div>' +
+    '<div class="impact-line">☂️ ' + fmt(shade,0) + ' m² of shade provided</div>';
+}
+
+/* ============================================================
+   DETAIL DRAWER + VOTING
+   ============================================================ */
+function attrLabelUnit(attr){
+  if(attr==='height') return {label:'Height', suffix:' m'};
+  if(attr==='diameter') return {label:'Diameter (DBH)', suffix:' cm'};
+  return {label:'', suffix:''};
+}
+
+function renderDrawer(){
+  const drawer = document.getElementById('drawer');
+  if(!selectedTreeId){ drawer.classList.remove('show'); drawer.innerHTML=''; return; }
+  const tree = trees.find(t=>t.id===selectedTreeId);
+  if(!tree){ drawer.classList.remove('show'); return; }
+  const locked = tree.status === 'approved';
+  const mv = myVotes[tree.id] || {};
+
+  function altLabel(attr, raw){
+    if(attr === 'species') return escapeHtml(raw.commonName);
+    if(attr === 'location') return '📍 suggested spot';
+    return raw + (attr==='height' ? ' m' : ' cm');
+  }
+
+  function voteSection(attr){
+    if(locked) return '<div class="locked-note">Approved by a teacher — votes are closed.</div>';
+    const v = tree.votes[attr];
+    const my = mv[attr] || null;
+    const iAgree = my && my.kind === 'agree';
+    const myAltKey = my && my.kind === 'alt' ? my.key : null;
+
+    let html = '<div class="vote-row">';
+    html += '<button class="vote-btn agree' + (iAgree?' active':'') + '" data-vote-attr="'+attr+'" data-vote-action="agree">👍 Agree <span class="vote-count">(' + (v.agree||0) + ')</span></button>';
+    html += '<button class="vote-btn disagree" data-vote-attr="'+attr+'" data-vote-action="fix">👎 Suggest a fix</button>';
+    html += '</div>';
+
+    const alts = (v.alternatives||[]).slice().sort((a,b)=>b.count-a.count);
+    if(alts.length){
+      html += '<div class="alt-list">';
+      alts.forEach(a=>{
+        const mine = a.key === myAltKey;
+        if(attr === 'location'){
+          html += '<button type="button" class="alt-chip' + (mine?' mine':'') + '" data-alt-lat="'+a.raw.lat+'" data-alt-lng="'+a.raw.lng+'">' +
+            altLabel(attr,a.raw) + ' (' + a.count + ')' + (mine?' · yours':'') + '</button>';
+        } else {
+          html += '<span class="alt-chip' + (mine?' mine':'') + '">' + altLabel(attr,a.raw) + ' (' + a.count + ')' + (mine?' · yours':'') + '</span>';
+        }
+      });
+      html += '</div>';
+    }
+    if(myAltKey){
+      html += '<button type="button" class="remove-my-vote" data-vote-attr="'+attr+'">Remove my suggestion</button>';
+    }
+    return html;
+  }
+
+  let html = '<div class="drawer-head">';
+  html += '<button class="drawer-close" id="drawerCloseBtn">✕</button>';
+  html += '<h3>' + escapeHtml(tree.species) + '</h3>';
+  html += '<div class="sci">' + escapeHtml(tree.scientificName||'') + '</div>';
+  html += '<span class="status-pill ' + tree.status + '">' + (tree.status==='approved'?'Approved':'Suggested') + '</span>';
+  html += '</div><div class="drawer-body">';
+
+  const eco = computeEcology(tree);
+  html += '<div class="eco-section">';
+  html += '<div class="eco-title">🌿 What this tree is doing</div>';
+  html += '<div class="eco-grid">';
+  html += ecoCard('CO₂ absorbed / year', fmt(eco.co2Annual,1) + ' kg');
+  html += ecoCard('CO₂ stored so far', fmt(eco.co2Lifetime,0) + ' kg');
+  html += ecoCard('O₂ released / year', fmt(eco.o2Annual,1) + ' kg');
+  html += ecoCard('O₂ released so far', fmt(eco.o2Lifetime,0) + ' kg');
+  html += ecoCard('Canopy spread', fmt(eco.canopySpreadM,1) + ' m');
+  html += ecoCard('Shaded ground area', fmt(eco.shadeAreaM2,0) + ' m²');
+  html += '</div>';
+  html += '<div class="eco-fact">Estimated age: about ' + eco.ageYears + ' year' + (eco.ageYears===1?'':'s') +
+    '. Wood type used for this estimate: ' + eco.densityCategory + ' (density ≈ ' + eco.density.toFixed(2) + ' g/cm³). ' +
+    'The CO₂ it has stored so far is roughly what an average car would emit driving ' + fmt(eco.carKm,0) + ' km.</div>';
+  html += '<button class="eco-toggle" id="ecoInfoToggle" type="button">How is this calculated?</button>';
+  html += '<div class="eco-info" id="ecoInfoBox">Estimates come from the tree\'s trunk diameter (DBH) and height using ' +
+    'standard urban-forestry formulas: trunk size and height give an estimated wood volume, which is converted to weight ' +
+    'using a wood density specific to ' + escapeHtml(tree.species) + ' (' + eco.densityCategory + ') rather than one ' +
+    'generic number for every species — dense hardwoods like oak or hickory store more carbon for the same size than ' +
+    'lighter woods like pine, cedar, or basswood. Roots add a further ' + (tree.leaf==='conifer'?'25%':'20%') +
+    ' to that weight (conifers typically allocate a bit more mass below ground). About half of the dry weight is carbon, ' +
+    'and each kg of carbon corresponds to about 3.67 kg of CO₂ once combined with oxygen. "Per year" figures compare ' +
+    'this year\'s estimate to last year\'s, using a typical annual growth rate for this species. Canopy spread and shade ' +
+    'are estimated from height using a typical crown shape for ' + (tree.leaf==='conifer'?'conifers':'broadleaf trees') +
+    '. These are teaching approximations, not a scientific tree inventory — real trees vary a lot with health, site conditions, and crowding.</div>';
+  html += '</div>';
+
+  html += '<div class="attr-row"><div class="attr-label">Location</div><div class="attr-value">' + tree.lat.toFixed(5) + ', ' + tree.lng.toFixed(5) + '</div>' + voteSection('location') + '</div>';
+  html += '<div class="attr-row"><div class="attr-label">Species</div><div class="attr-value">' + escapeHtml(tree.species) + '</div>' + voteSection('species') + '</div>';
+  html += '<div class="attr-row"><div class="attr-label">Height</div><div class="attr-value">' + tree.height + ' m</div>' + voteSection('height') + '</div>';
+  html += '<div class="attr-row"><div class="attr-label">Diameter (DBH)</div><div class="attr-value">' + tree.diameter + ' cm</div>' + voteSection('diameter') + '</div>';
+
+  html += '<div class="meta-line">School: ' + escapeHtml(tree.school) + '</div>';
+  html += '<div class="meta-line">Logged ' + new Date(tree.createdAt).toLocaleDateString() + '</div>';
+  html += '</div>';
+
+  drawer.innerHTML = html;
+  drawer.classList.add('show');
+
+  document.getElementById('drawerCloseBtn').addEventListener('click', ()=>{ selectedTreeId=null; renderDrawer(); });
+  drawer.querySelectorAll('[data-vote-action="agree"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> toggleAgree(tree.id, btn.dataset.voteAttr));
+  });
+  drawer.querySelectorAll('[data-vote-action="fix"]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openCorrectionFlow(tree.id, btn.dataset.voteAttr));
+  });
+  drawer.querySelectorAll('.remove-my-vote').forEach(btn=>{
+    btn.addEventListener('click', ()=> removeMyVote(tree.id, btn.dataset.voteAttr));
+  });
+  drawer.querySelectorAll('.alt-chip[data-alt-lat]').forEach(btn=>{
+    btn.addEventListener('click', ()=> flashSuggestedLocation(parseFloat(btn.dataset.altLat), parseFloat(btn.dataset.altLng)));
+  });
+  const ecoToggle = document.getElementById('ecoInfoToggle');
+  if(ecoToggle){
+    ecoToggle.addEventListener('click', ()=>{
+      document.getElementById('ecoInfoBox').classList.toggle('show');
+    });
+  }
+}
+
+// Applies a vote change generically: whatever this device previously had
+// recorded for (treeId, attr) is removed, and `next` (or nothing, if null)
+// is recorded instead. Used for both the plain "agree" toggle and for
+// proposing/changing/removing an alternative.
+async function applyVoteChange(treeId, attr, next){
+  const tree = trees.find(t=>t.id===treeId);
+  if(!tree || tree.status==='approved') return;
+  myVotes[treeId] = myVotes[treeId] || {};
+  const prev = myVotes[treeId][attr] || null;
+
+  myVotes[treeId][attr] = next;
+  saveMyVotes();
+
+  // Optimistic local update so it feels instant, even before the sheet
+  // confirms it (and especially useful offline).
+  decrementVoteEntry(tree.votes[attr], prev);
+  incrementVoteEntry(tree.votes[attr], next);
+  renderMarkers();
+  renderDrawer();
+
+  await sendAction({ type:'setAttrVote', treeId, attr, prev, next });
+}
+
+function toggleAgree(treeId, attr){
+  const mine = (myVotes[treeId] && myVotes[treeId][attr]) || null;
+  const next = (mine && mine.kind==='agree') ? null : {kind:'agree'};
+  applyVoteChange(treeId, attr, next);
+}
+
+function submitAlternative(treeId, attr, raw){
+  const key = altKey(attr, raw);
+  applyVoteChange(treeId, attr, {kind:'alt', key, raw});
+}
+
+function removeMyVote(treeId, attr){
+  applyVoteChange(treeId, attr, null);
+}
+
+function openCorrectionFlow(treeId, attr){
+  if(attr === 'location'){
+    startLocationCorrection(treeId);
+  } else {
+    openCorrectionModal(treeId, attr);
+  }
+}
+
+/* ----- species / height / diameter corrections: small modal ----- */
+let correctionContext = null; // {treeId, attr, value}
+
+function openCorrectionModal(treeId, attr){
+  const titles = {
+    species: 'What species do you think this actually is?',
+    height: 'What height (m) do you think is correct?',
+    diameter: 'What trunk diameter, DBH (cm) do you think is correct?'
+  };
+  correctionContext = { treeId, attr, value: null };
+  document.getElementById('correctionTitle').textContent = titles[attr];
+  const mine = myVotes[treeId] && myVotes[treeId][attr] && myVotes[treeId][attr].kind === 'alt'
+    ? myVotes[treeId][attr].raw : null;
+  const wrap = document.getElementById('correctionFieldWrap');
+
+  if(attr === 'species'){
+    wrap.innerHTML = '<label>Species</label><button type="button" class="species-picker-btn" id="corSpeciesBtn"></button>';
+    const btn = document.getElementById('corSpeciesBtn');
+    const preset = mine ? {commonName:mine.commonName, scientificName:mine.scientificName, photoUrl:null} : null;
+    renderSpeciesButton(btn, preset);
+    correctionContext.value = mine || null;
+    btn.addEventListener('click', (e)=> openSpeciesPanel(e.currentTarget, (species)=>{
+      correctionContext.value = species;
+      renderSpeciesButton(btn, species);
+    }));
+  } else {
+    const unit = attr === 'height' ? 'm' : 'cm';
+    const step = attr === 'height' ? '0.1' : '0.5';
+    wrap.innerHTML = '<label>Your estimate (' + unit + ')</label>' +
+      '<input type="number" id="corValueInput" min="0" step="' + step + '" value="' + (mine!=null ? mine : '') + '">';
+    correctionContext.value = mine;
+  }
+  document.getElementById('correctionOverlay').classList.add('show');
+}
+function closeCorrectionModal(){
+  document.getElementById('correctionOverlay').classList.remove('show');
+  correctionContext = null;
+}
+function submitCorrection(){
+  if(!correctionContext) return;
+  const { treeId, attr } = correctionContext;
+  let raw;
+  if(attr === 'species'){
+    const val = correctionContext.value;
+    if(!val || !val.scientificName){ alert('Please choose a species.'); return; }
+    raw = { commonName: val.commonName, scientificName: val.scientificName };
+  } else {
+    const num = parseFloat(document.getElementById('corValueInput').value);
+    if(isNaN(num) || num<=0){ alert('Please enter a value greater than 0.'); return; }
+    raw = Math.round(num*10)/10;
+  }
+  submitAlternative(treeId, attr, raw);
+  closeCorrectionModal();
+}
+
+/* ----- location corrections: tap the map instead of a form ----- */
+let correctionLocationTarget = null; // treeId, while waiting for a map tap
+
+function startLocationCorrection(treeId){
+  correctionLocationTarget = treeId;
+  document.getElementById('drawer').classList.remove('show');
+  document.getElementById('map').classList.add('addmode');
+  document.getElementById('correctionBanner').classList.add('show');
+}
+function cancelLocationCorrection(){
+  correctionLocationTarget = null;
+  document.getElementById('map').classList.remove('addmode');
+  document.getElementById('correctionBanner').classList.remove('show');
+  renderDrawer();
+}
+
+let flashMarker = null, flashMarkerTimer = null;
+function flashSuggestedLocation(lat, lng){
+  map.setView([lat,lng], Math.max(map.getZoom(), 17));
+  if(flashMarker){ map.removeLayer(flashMarker); }
+  if(flashMarkerTimer) clearTimeout(flashMarkerTimer);
+  flashMarker = L.circleMarker([lat,lng], {radius:14, color:'#B9822C', weight:3, fillColor:'#B9822C', fillOpacity:0.25}).addTo(map);
+  flashMarkerTimer = setTimeout(()=>{ if(flashMarker){ map.removeLayer(flashMarker); flashMarker=null; } }, 3500);
+}
+
+function ecoCard(label, value){
+  return '<div class="eco-card"><div class="eco-card-value">' + value + '</div><div class="eco-card-label">' + label + '</div></div>';
+}
+
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============================================================
+   ADD TREE FLOW
+   ============================================================ */
+function openAddModal(){
+  pendingSpecies = null;
+  document.getElementById('coordNote').textContent = 'Pin location: ' + draftLatLng.lat.toFixed(5) + ', ' + draftLatLng.lng.toFixed(5);
+  document.getElementById('mHeight').value = '';
+  document.getElementById('mDiameter').value = '';
+  document.getElementById('mSchool').selectedIndex = 0;
+  renderSpeciesButton(document.getElementById('mSpeciesBtn'), null);
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeAddModal(){
+  document.getElementById('modalOverlay').classList.remove('show');
+  draftLatLng = null;
+}
+
+async function submitTree(){
+  if(!SHEETS_CONFIGURED){ alert('This app is not connected to a sheet yet — see the setup notice at the top of the page.'); return; }
+  const school = document.getElementById('mSchool').value;
+  const height = parseFloat(document.getElementById('mHeight').value);
+  const diameter = parseFloat(document.getElementById('mDiameter').value);
+  if(!pendingSpecies){ alert('Please choose a species.'); return; }
+  if(!school){ alert('Please choose a school.'); return; }
+  if(isNaN(height) || height<=0){ alert('Please enter a height in metres.'); return; }
+  if(isNaN(diameter) || diameter<=0){ alert('Please enter a diameter (DBH) in centimetres.'); return; }
+
+  const id = newTreeId();
+  const tree = {
+    id: id,
+    lat: draftLatLng.lat,
+    lng: draftLatLng.lng,
+    school: school,
+    species: pendingSpecies.commonName,
+    scientificName: pendingSpecies.scientificName,
+    growth: pendingSpecies.growth || 'medium',
+    leaf: pendingSpecies.leaf || 'broadleaf',
+    density: pendingSpecies.density || BASELINE_DENSITY,
+    height: Math.round(height*10)/10,
+    diameter: Math.round(diameter*10)/10,
+    status: 'suggested',
+    createdAt: new Date().toISOString(),
+    votes: blankVotes()
+  };
+
+  // Add it locally right away (works even offline); the sheet gets it via
+  // sendAction, which queues automatically if there's no connection.
+  trees.push(tree);
+  cacheTrees();
+  closeAddModal();
+  selectedTreeId = id;
+  refreshAll();
+
+  await sendAction({ type:'addTree', tree });
+}
+
+/* ============================================================
+   SPECIES PICKER PANEL
+   ============================================================ */
+let speciesSearchDebounce = null;
+let speciesPickerOnSelect = null; // callback(item) set by whichever flow opened the panel
+
+function openSpeciesPanel(anchorEl, onSelect){
+  speciesPickerOnSelect = onSelect;
+  const panel = document.getElementById('speciesPanel');
+  const rect = anchorEl.getBoundingClientRect();
+  panel.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  panel.style.left = (rect.left + window.scrollX) + 'px';
+  panel.classList.add('show');
+  document.getElementById('speciesSearch').value = '';
+  document.getElementById('speciesSearch').focus();
+  renderSpeciesList(CURATED_SPECIES, [], true);
+}
+function closeSpeciesPanel(){
+  document.getElementById('speciesPanel').classList.remove('show');
+}
+
+function speciesItemHtml(item, idx){
+  const thumb = item.photoUrl
+    ? '<img class="species-thumb" src="'+item.photoUrl+'" alt="">'
+    : '<span class="placeholder-thumb">🍃</span>';
+  return '<div class="species-item" data-idx="'+idx+'" style="cursor:pointer;">' + thumb +
+    '<span class="species-name-block"><span class="cn">'+escapeHtml(item.commonName)+'</span>' +
+    '<span class="sn">'+escapeHtml(item.scientificName)+'</span></span></div>';
+}
+
+let currentSpeciesResults = [];
+
+async function renderSpeciesList(curatedMatches, extraMatches, isInitial){
+  currentSpeciesResults = curatedMatches.concat(extraMatches);
+  const list = document.getElementById('speciesList');
+  let html = '';
+  if(curatedMatches.length){
+    html += '<div class="species-section-label">Common in Waterloo Region</div>';
+    curatedMatches.forEach((item,i)=>{ html += speciesItemHtml(item, i); });
+  }
+  if(extraMatches.length){
+    html += '<div class="species-section-label">More from iNaturalist</div>';
+    extraMatches.forEach((item,i)=>{ html += speciesItemHtml(item, curatedMatches.length+i); });
+  }
+  if(!curatedMatches.length && !extraMatches.length){
+    html = '<div style="padding:14px;font-size:12.5px;color:var(--ink-soft);">No matches yet — keep typing to search iNaturalist.</div>';
+  }
+  list.innerHTML = html;
+  list.querySelectorAll('.species-item').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const item = currentSpeciesResults[parseInt(el.dataset.idx,10)];
+      selectSpecies(item);
+    });
+  });
+
+  if(isInitial){
+    // lazily fetch thumbnails for curated species not yet cached
+    CURATED_SPECIES.forEach(async (item)=>{
+      if(speciesPhotoCache[item.scientificName]) return;
+      const info = await fetchSpeciesPhoto(item.scientificName);
+      if(info.photoUrl){
+        item.photoUrl = info.photoUrl;
+        if(document.getElementById('speciesPanel').classList.contains('show')){
+          renderSpeciesList(curatedMatches, extraMatches, false);
+        }
+      }
+    });
+  }
+}
+
+function selectSpecies(item){
+  const picked = {commonName:item.commonName, scientificName:item.scientificName, photoUrl:item.photoUrl||null,
+    growth:item.growth || 'medium', leaf:item.leaf || 'broadleaf', density:item.density || BASELINE_DENSITY};
+  closeSpeciesPanel();
+  if(speciesPickerOnSelect) speciesPickerOnSelect(picked);
+}
+
+// Renders a species-picker button's contents (thumbnail + name) — shared by
+// the "suggest a tree" modal and the species-correction modal.
+function renderSpeciesButton(btnEl, species){
+  if(!species){
+    btnEl.innerHTML = '<span class="placeholder-thumb">🍃</span><span class="species-name-block"><span class="cn">Choose a species…</span></span>';
+    return;
+  }
+  const thumb = species.photoUrl
+    ? '<img class="species-thumb" src="'+species.photoUrl+'" alt="">'
+    : '<span class="placeholder-thumb">🍃</span>';
+  btnEl.innerHTML = thumb + '<span class="species-name-block"><span class="cn">'+escapeHtml(species.commonName)+'</span><span class="sn">'+escapeHtml(species.scientificName)+'</span></span>';
+}
+
+function handleSpeciesSearch(){
+  const q = document.getElementById('speciesSearch').value.trim();
+  if(!q){ renderSpeciesList(CURATED_SPECIES, [], false); return; }
+  const ql = q.toLowerCase();
+  const curatedMatches = CURATED_SPECIES.filter(s=>
+    s.commonName.toLowerCase().includes(ql) || s.scientificName.toLowerCase().includes(ql)
+  );
+  clearTimeout(speciesSearchDebounce);
+  if(q.length < 3){ renderSpeciesList(curatedMatches, [], false); return; }
+  speciesSearchDebounce = setTimeout(async ()=>{
+    const results = await searchINatSpecies(q);
+    const curatedSci = new Set(curatedMatches.map(s=>s.scientificName));
+    const extra = results.filter(r=>!curatedSci.has(r.scientificName)).slice(0,8);
+    renderSpeciesList(curatedMatches, extra, false);
+  }, 350);
+}
+
+/* ============================================================
+   TEACHER VIEW
+   ============================================================ */
+/* ============================================================
+   LEADERBOARD
+   ============================================================ */
+function renderLeaderboard(){
+  const wrap = document.getElementById('leaderboardWrap');
+  const statusFilter = document.getElementById('lStatus').value;
+  const pool = trees.filter(t=> statusFilter==='all' || t.status===statusFilter);
+
+  if(!pool.length){
+    wrap.innerHTML = '<div class="empty-state">No trees logged yet for this filter — suggest a tree to get a school on the board!</div>';
+    return;
+  }
+
+  const bySchool = {};
+  pool.forEach(t=>{
+    const eco = computeEcology(t);
+    if(!bySchool[t.school]) bySchool[t.school] = {school:t.school, count:0, co2Annual:0, o2Annual:0, shade:0};
+    const s = bySchool[t.school];
+    s.count += 1;
+    s.co2Annual += eco.co2Annual;
+    s.o2Annual += eco.o2Annual;
+    s.shade += eco.shadeAreaM2;
+  });
+
+  const ranked = Object.values(bySchool).sort((a,b)=> b.co2Annual - a.co2Annual);
+  const maxCo2 = ranked[0].co2Annual || 1;
+
+  let html = '';
+  ranked.forEach((s, i)=>{
+    const pct = Math.max(4, Math.round((s.co2Annual / maxCo2) * 100));
+    html += '<div class="lb-row' + (i===0 ? ' top1' : '') + '">';
+    html += '<div class="lb-rank">' + (i===0 ? '🏆' : '#'+(i+1)) + '</div>';
+    html += '<div class="lb-main">';
+    html += '<div class="lb-name">' + escapeHtml(s.school) + '</div>';
+    html += '<div class="lb-sub">' + s.count + ' tree' + (s.count===1?'':'s') + ' logged</div>';
+    html += '<div class="lb-bar-track"><div class="lb-bar-fill" style="width:' + pct + '%;"></div></div>';
+    html += '</div>';
+    html += '<div class="lb-stats">';
+    html += '<div class="lb-stat"><div class="lb-stat-value">' + fmt(s.co2Annual,0) + '</div><div class="lb-stat-label">kg CO₂/yr</div></div>';
+    html += '<div class="lb-stat"><div class="lb-stat-value">' + fmt(s.o2Annual,0) + '</div><div class="lb-stat-label">kg O₂/yr</div></div>';
+    html += '<div class="lb-stat"><div class="lb-stat-value">' + fmt(s.shade,0) + '</div><div class="lb-stat-label">m² shade</div></div>';
+    html += '</div></div>';
+  });
+  wrap.innerHTML = html;
+}
+
+function topAltText(attr, bucket){
+  if(!bucket.alternatives || !bucket.alternatives.length) return '';
+  const top = bucket.alternatives.slice().sort((a,b)=>b.count-a.count)[0];
+  const label = attr==='species' ? top.raw.commonName
+    : attr==='location' ? 'alt. spot'
+    : (top.raw + (attr==='height' ? 'm' : 'cm'));
+  return ' → ' + escapeHtml(label) + '(' + top.count + ')';
+}
+
+function renderTeacherTable(){
+  const wrap = document.getElementById('tableWrap');
+  const list = teacherFilteredTrees();
+  if(!list.length){
+    wrap.innerHTML = '<div class="empty-state">No trees match these filters yet.</div>';
+    return;
+  }
+  let html = '<table class="tree-table"><thead><tr>' +
+    '<th>Species</th><th>School</th><th>Height (m)</th><th>Diameter (cm)</th><th>Status</th><th>Votes</th><th>Ecology / yr</th><th>Actions</th>' +
+    '</tr></thead><tbody>';
+  list.forEach(tree=>{
+    const v = tree.votes;
+    const eco = computeEcology(tree);
+    html += '<tr data-id="'+tree.id+'">';
+    html += '<td><input type="text" class="edit-species" value="'+escapeHtml(tree.species)+'"></td>';
+    html += '<td><select class="edit-school">' + Object.entries(SCHOOLS).map(([g,names])=>
+        '<optgroup label="'+g+'">' + names.map(n=>'<option value="'+escapeHtml(n)+'"'+(n===tree.school?' selected':'')+'>'+escapeHtml(n)+'</option>').join('') + '</optgroup>'
+      ).join('') + '</select></td>';
+    html += '<td><input type="number" step="0.1" class="edit-height" value="'+tree.height+'" style="width:70px;"></td>';
+    html += '<td><input type="number" step="0.5" class="edit-diameter" value="'+tree.diameter+'" style="width:70px;"></td>';
+    html += '<td><span class="status-pill ' + tree.status + '">' + (tree.status==='approved'?'Approved':'Suggested') + '</span></td>';
+    html += '<td class="votes-mini">loc '+v.location.agree+'👍'+topAltText('location',v.location)+'<br>' +
+            'spc '+v.species.agree+'👍'+topAltText('species',v.species)+'<br>' +
+            'ht '+v.height.agree+'👍'+topAltText('height',v.height)+'<br>' +
+            'dia '+v.diameter.agree+'👍'+topAltText('diameter',v.diameter)+'</td>';
+    html += '<td class="votes-mini">CO₂ '+fmt(eco.co2Annual,1)+' kg<br>O₂ '+fmt(eco.o2Annual,1)+' kg<br>shade '+fmt(eco.shadeAreaM2,0)+' m²</td>';
+    html += '<td class="rowactions">' +
+      '<button class="btn small secondary save-btn">Save edits</button>' +
+      '<button class="btn small ' + (tree.status==='approved' ? 'secondary' : '') + ' approve-btn">' + (tree.status==='approved' ? 'Unlock' : 'Approve') + '</button>' +
+      '<button class="btn small danger delete-btn">Delete</button>' +
+      '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('tr[data-id]').forEach(tr=>{
+    const id = tr.dataset.id;
+    tr.querySelector('.save-btn').addEventListener('click', async ()=>{
+      const tree = trees.find(t=>t.id===id);
+      const newSpecies = tr.querySelector('.edit-species').value.trim() || tree.species;
+      const updates = { species: newSpecies, school: tr.querySelector('.edit-school').value };
+      if(newSpecies !== tree.species){
+        const match = CURATED_SPECIES.find(s=>s.commonName.toLowerCase()===newSpecies.toLowerCase());
+        if(match){ updates.scientificName = match.scientificName; updates.growth = match.growth; updates.leaf = match.leaf; updates.density = match.density; }
+      }
+      const h = parseFloat(tr.querySelector('.edit-height').value);
+      const d = parseFloat(tr.querySelector('.edit-diameter').value);
+      if(!isNaN(h)) updates.height = Math.round(h*10)/10;
+      if(!isNaN(d)) updates.diameter = Math.round(d*10)/10;
+      Object.assign(tree, updates);
+      cacheTrees();
+      renderTeacherTable();
+      await sendAction({ type:'updateTree', treeId:id, fields:updates });
+    });
+    tr.querySelector('.approve-btn').addEventListener('click', async ()=>{
+      const tree = trees.find(t=>t.id===id);
+      const newStatus = tree.status === 'approved' ? 'suggested' : 'approved';
+      tree.status = newStatus;
+      cacheTrees();
+      renderTeacherTable();
+      await sendAction({ type:'setStatus', treeId:id, status:newStatus });
+    });
+    tr.querySelector('.delete-btn').addEventListener('click', async ()=>{
+      if(!confirm('Delete this tree suggestion? This cannot be undone.')) return;
+      trees = trees.filter(t=>t.id!==id);
+      cacheTrees();
+      renderTeacherTable();
+      await sendAction({ type:'deleteTree', treeId:id });
+    });
+  });
+}
+
+/* ============================================================
+   ROLE / VIEW SWITCHING
+   ============================================================ */
+function setRole(newRole){
+  role = newRole;
+  closeSidebar();
+  document.getElementById('tabStudent').classList.toggle('active', role==='student');
+  document.getElementById('tabLeaderboard').classList.toggle('active', role==='leaderboard');
+  document.getElementById('tabTeacher').classList.toggle('active', role==='teacher');
+  document.getElementById('studentView').style.display = role==='student' ? 'flex' : 'none';
+  document.getElementById('leaderboardView').style.display = role==='leaderboard' ? 'flex' : 'none';
+  document.getElementById('teacherView').style.display = role==='teacher' ? 'flex' : 'none';
+  if(role==='student'){
+    setTimeout(()=>{ if(map) map.invalidateSize(); }, 50);
+  } else if(role==='leaderboard'){
+    renderLeaderboard();
+  } else {
+    if(teacherUnlocked){
+      document.getElementById('teacherGate').style.display='none';
+      document.getElementById('teacherPanel').style.display='block';
+      renderTeacherTable();
+    } else {
+      document.getElementById('teacherGate').style.display='block';
+      document.getElementById('teacherPanel').style.display='none';
+    }
+  }
+}
+
+/* ============================================================
+   INIT / EVENTS
+   ============================================================ */
+function openSidebar(){
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarBackdrop').classList.add('show');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('show');
+}
+
+function wireEvents(){
+  document.getElementById('tabStudent').addEventListener('click', ()=>setRole('student'));
+  document.getElementById('tabLeaderboard').addEventListener('click', ()=>setRole('leaderboard'));
+  document.getElementById('tabTeacher').addEventListener('click', ()=>setRole('teacher'));
+  document.getElementById('lStatus').addEventListener('change', renderLeaderboard);
+
+  document.getElementById('sidebarToggleBtn').addEventListener('click', openSidebar);
+  document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebar);
+  document.getElementById('basemapToggleBtn').addEventListener('click', toggleBasemap);
+  document.getElementById('locateBtn').addEventListener('click', toggleLocate);
+
+  document.getElementById('startAddBtn').addEventListener('click', ()=>{
+    addMode = true;
+    document.getElementById('map').classList.add('addmode');
+    document.getElementById('addmodeBanner').classList.add('show');
+    closeSidebar();
+  });
+  document.getElementById('cancelAddBtn').addEventListener('click', ()=>{
+    addMode = false;
+    document.getElementById('map').classList.remove('addmode');
+    document.getElementById('addmodeBanner').classList.remove('show');
+  });
+  document.getElementById('cancelCorrectionLocationBtn').addEventListener('click', cancelLocationCorrection);
+  document.getElementById('cancelCorrectionBtn').addEventListener('click', closeCorrectionModal);
+  document.getElementById('submitCorrectionBtn').addEventListener('click', submitCorrection);
+  document.getElementById('correctionOverlay').addEventListener('click', (e)=>{
+    if(e.target.id==='correctionOverlay') closeCorrectionModal();
+  });
+
+  ['fStatus','fSchool','fSpecies'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', renderMarkers);
+  });
+  ['tStatus','tSchool','tSpecies'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', renderTeacherTable);
+  });
+
+  document.getElementById('cancelModalBtn').addEventListener('click', closeAddModal);
+  document.getElementById('submitTreeBtn').addEventListener('click', submitTree);
+  document.getElementById('modalOverlay').addEventListener('click', (e)=>{
+    if(e.target.id==='modalOverlay') closeAddModal();
+  });
+
+  document.getElementById('mSpeciesBtn').addEventListener('click', (e)=> openSpeciesPanel(e.currentTarget, (species)=>{
+    pendingSpecies = species;
+    renderSpeciesButton(document.getElementById('mSpeciesBtn'), species);
+  }));
+  document.getElementById('speciesSearch').addEventListener('input', handleSpeciesSearch);
+  document.addEventListener('click', (e)=>{
+    const panel = document.getElementById('speciesPanel');
+    if(panel.classList.contains('show') && !panel.contains(e.target) && !e.target.closest('.species-picker-btn')){
+      closeSpeciesPanel();
+    }
+  });
+
+  document.getElementById('teacherEnterBtn').addEventListener('click', ()=>{
+    const val = document.getElementById('teacherPass').value;
+    if(val === TEACHER_PASSCODE){
+      teacherUnlocked = true;
+      setRole('teacher');
+    } else {
+      alert('Incorrect passcode.');
+    }
+  });
+  document.getElementById('teacherPass').addEventListener('keydown', (e)=>{
+    if(e.key==='Enter') document.getElementById('teacherEnterBtn').click();
+  });
+}
+
+function refreshAll(){
+  populateFilterOptions();
+  if(role === 'student'){ renderMarkers(); if(selectedTreeId) renderDrawer(); }
+  else if(role === 'leaderboard'){ renderLeaderboard(); }
+  else if(role === 'teacher' && teacherUnlocked){ renderTeacherTable(); }
+}
+
+function init(){
+  initMap();
+  wireEvents();
+  loadMyVotes();
+  populateFilterOptions();
+  renderMarkers();
+  initBackend(); // loads cache, then polls the sheet; non-blocking so the map is usable immediately
+}
+init();
+</script>
+</body>
+</html>
