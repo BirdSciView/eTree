@@ -486,6 +486,7 @@
       <button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn">☰ Filters</button>
       <div class="map-controls-extra">
         <button type="button" class="map-ctrl-btn" id="basemapToggleBtn">🛰️ Satellite</button>
+        <button type="button" class="map-ctrl-btn active" id="canopyBtn" title="Show or hide estimated canopy size">🌳 Canopy</button>
         <button type="button" class="map-ctrl-btn" id="locateBtn" title="Show my location">📍 My location</button>
       </div>
       <div id="map"></div>
@@ -1177,6 +1178,7 @@ async function searchINatSpecies(query){
 /* ============================================================
    MAP
    ============================================================ */
+let canopyLayer, canopiesOn = true;
 let streetLayer, satelliteLayer, locationMarker, locationAccuracyCircle, locating = false;
 
 function initMap(){
@@ -1192,6 +1194,7 @@ function initMap(){
     attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
   });
 
+  canopyLayer = L.layerGroup().addTo(map); // drawn before markers so pins stay on top
   markersLayer = L.layerGroup().addTo(map);
 
   map.on('click', function(e){
@@ -1285,9 +1288,23 @@ function netLocationLabel(tree){
 
 function renderMarkers(){
   markersLayer.clearLayers();
+  canopyLayer.clearLayers();
   for(const k in markerById) delete markerById[k];
   const filtered = filteredTrees();
   filtered.forEach(tree=>{
+    // Canopy "halo": a circle on the ground roughly the size of the crown
+    // (radius = half the estimated canopy spread). Not clickable, so it never
+    // gets in the way of tapping the map to place or correct a pin.
+    if(canopiesOn){
+      const spread = computeEcology(tree).canopySpreadM;
+      if(spread > 0){
+        const color = tree.status === 'approved' ? '#3F7A52' : '#B9822C';
+        L.circle([tree.lat, tree.lng], {
+          radius: spread/2, color: color, weight: 1.5, opacity: 0.8,
+          fillColor: color, fillOpacity: 0.22, interactive: false
+        }).addTo(canopyLayer);
+      }
+    }
     const marker = L.marker([tree.lat, tree.lng], {icon: leafDivIcon(tree.status, netLocationLabel(tree))});
     marker.on('click', ()=>{ selectedTreeId = tree.id; closeSidebar(); renderDrawer(); });
     marker.addTo(markersLayer);
@@ -2231,6 +2248,11 @@ function wireEvents(){
   document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebar);
   document.getElementById('basemapToggleBtn').addEventListener('click', toggleBasemap);
   document.getElementById('locateBtn').addEventListener('click', toggleLocate);
+  document.getElementById('canopyBtn').addEventListener('click', ()=>{
+    canopiesOn = !canopiesOn;
+    document.getElementById('canopyBtn').classList.toggle('active', canopiesOn);
+    renderMarkers();
+  });
 
   document.getElementById('startAddBtn').addEventListener('click', ()=>{
     addMode = true;
