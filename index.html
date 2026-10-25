@@ -601,7 +601,7 @@
     <p class="coord-note">Pick a method. Everything is in metres.</p>
     <div class="seg" id="hcTabs">
       <button type="button" data-tab="stick" class="active">Stick &amp; walk</button>
-      <button type="button" data-tab="shadow">Shadows</button>
+      <button type="button" data-tab="triangle">Right triangle</button>
       <button type="button" data-tab="clino">Clinometer</button>
     </div>
     <div id="hcBody"></div>
@@ -1321,6 +1321,8 @@ function populateFilterOptions(){
   schoolSelects.forEach(sel=>{
     if(!sel) return;
     const isFilter = sel.id !== 'mSchool';
+    if(!isFilter && sel.dataset.built) return; // static list; don't wipe the suggestion/selection on refresh
+    const prevValue = sel.value;
     sel.innerHTML = isFilter ? '<option value="all">All schools</option>' : '';
     Object.entries(SCHOOLS).forEach(([group, names])=>{
       const og = document.createElement('optgroup');
@@ -1332,17 +1334,21 @@ function populateFilterOptions(){
       });
       sel.appendChild(og);
     });
+    if(!isFilter) sel.dataset.built = '1';
+    if(prevValue && Array.from(sel.options).some(o=>o.value===prevValue)) sel.value = prevValue;
   });
 
   const speciesNames = Array.from(new Set(trees.map(t=>t.species))).sort();
   [document.getElementById('fSpecies'), document.getElementById('tSpecies')].forEach(sel=>{
     if(!sel) return;
+    const prevSpecies = sel.value;
     sel.innerHTML = '<option value="all">All species</option>';
     speciesNames.forEach(n=>{
       const opt = document.createElement('option');
       opt.value = n; opt.textContent = n;
       sel.appendChild(opt);
     });
+    if(prevSpecies && Array.from(sel.options).some(o=>o.value===prevSpecies)) sel.value = prevSpecies;
   });
 }
 
@@ -1726,16 +1732,17 @@ function setHcTab(tab){
       '</ol><div class="hc-inputs">' +
         num('hcDist','Distance from you to the trunk (m)','e.g. 8') +
         num('hcEye','Your eye height (m)','e.g. 1.2','1.2') + '</div>';
-  } else if(tab === 'shadow'){
+  } else if(tab === 'triangle'){
     body.innerHTML =
       '<ol class="hc-steps">' +
-        '<li>Do this on a sunny day, on flat ground, with all three measurements taken at about the same time.</li>' +
-        '<li>Stand a stick upright (a metre stick works well) and measure its shadow.</li>' +
-        '<li>Measure the length of the tree\'s shadow, from the trunk to the tip of the shadow.</li>' +
+        '<li>Fold a square sheet of paper corner to corner. You now have a right-angle triangle with two equal short sides and a 45° corner.</li>' +
+        '<li>Hold it up to your eye with the right-angle corner at the bottom: one short side level (flat), the other straight up and down.</li>' +
+        '<li>Look along the long slanted edge. Walk toward or away from the tree until the very top of the tree sits exactly on that edge.</li>' +
+        '<li>Stay put and measure the distance from your feet to the trunk. Because the triangle has two equal sides, that distance is the same as the height of the tree above your eyes. Add your eye height to get the whole tree.</li>' +
       '</ol><div class="hc-inputs">' +
-        num('hcObj','Height of your stick (m)','e.g. 1','1') +
-        num('hcObjSh','Length of the stick\'s shadow (m)','e.g. 0.6') +
-        num('hcTreeSh','Length of the tree\'s shadow (m)','e.g. 5') + '</div>';
+        num('hcDist','Distance from you to the trunk (m)','e.g. 8') +
+        num('hcEye','Your eye height (m)','e.g. 1.2','1.2') + '</div>' +
+        '<p class="coord-note" style="margin:8px 0 0 0;">Works best on flat ground. If the ground slopes, stand at the same level as the base of the trunk.</p>';
   } else {
     body.innerHTML =
       '<ol class="hc-steps">' +
@@ -1753,12 +1760,10 @@ function setHcTab(tab){
 function computeHc(){
   const g = id => { const el = document.getElementById(id); return el ? parseFloat(el.value) : NaN; };
   let h = NaN;
-  if(hcTab === 'stick'){
+  if(hcTab === 'stick' || hcTab === 'triangle'){
+    // both use a 45° sight line: height above eye level = distance to the trunk
     const d = g('hcDist'), eye = g('hcEye');
     if(d>0) h = d + (isNaN(eye) ? 0 : eye);
-  } else if(hcTab === 'shadow'){
-    const o = g('hcObj'), os = g('hcObjSh'), ts = g('hcTreeSh');
-    if(o>0 && os>0 && ts>0) h = ts * o / os;
   } else {
     const d = g('hcDist'), a = g('hcAngle'), eye = g('hcEye');
     if(d>0 && a>0 && a<90) h = d * Math.tan(a*Math.PI/180) + (isNaN(eye) ? 0 : eye);
@@ -1879,6 +1884,100 @@ function escapeHtml(s){
 /* ============================================================
    ADD TREE FLOW
    ============================================================ */
+/* ============================================================
+   NEAREST-SCHOOL SUGGESTION
+   School locations come from OpenStreetMap (one small request, then cached
+   on the device for 30 days so it also works offline). Names are matched to
+   the WRDSB list loosely (ignoring words like "Public School"); any school
+   that can't be matched simply isn't considered for the suggestion.
+   ============================================================ */
+const SCHOOL_CACHE_KEY = 'understory-osm-schools-v1';
+const SCHOOL_CACHE_DAYS = 30;
+const GENERIC_SCHOOL_WORDS = new Set(['public','school','senior','junior','jr','sr','elementary','secondary','collegiate','institute','vocational','district','high','ss','ps','ci','cvi','and','the','of','centre','center']);
+const CITY_CENTRES = { cambridge:[43.36,-80.31], waterloo:[43.47,-80.52], kitchener:[43.45,-80.49], 'new hamburg':[43.38,-80.70] };
+let schoolCoords = {};        // WRDSB school name -> [{lat,lng}, ...]
+let schoolCoordsLoaded = false;
+let mSchoolTouched = false;
+
+function schoolKey(name){
+  return name.toLowerCase().replace(/\(.*?\)/g,' ').replace(/['’]/g,'').replace(/[^a-z0-9 ]+/g,' ')
+    .split(/\s+/).filter(t=>t && !GENERIC_SCHOOL_WORDS.has(t)).join('');
+}
+function distMetres(aLat,aLng,bLat,bLng){
+  const R=6371000, rad=Math.PI/180;
+  const dLat=(bLat-aLat)*rad, dLng=(bLng-aLng)*rad;
+  const x=Math.sin(dLat/2)**2 + Math.cos(aLat*rad)*Math.cos(bLat*rad)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+function matchSchools(osmSchools){
+  const byKey = {};
+  osmSchools.forEach(o=>{ const k = schoolKey(o.name); if(k){ (byKey[k] = byKey[k] || []).push(o); } });
+  const out = {}; const unmatched = [];
+  ALL_SCHOOL_NAMES.forEach(name=>{
+    let cands = byKey[schoolKey(name)] || [];
+    const paren = (name.match(/\(([^)]+)\)/) || [])[1];
+    if(cands.length > 1 && paren && CITY_CENTRES[paren.toLowerCase()]){
+      const c = CITY_CENTRES[paren.toLowerCase()];
+      cands = [cands.slice().sort((a,b)=>distMetres(a.lat,a.lng,c[0],c[1])-distMetres(b.lat,b.lng,c[0],c[1]))[0]];
+    }
+    if(cands.length) out[name] = cands.map(c=>({lat:c.lat,lng:c.lng}));
+    else unmatched.push(name);
+  });
+  if(unmatched.length) console.info('No map location found for these schools (they just won\'t be suggested):', unmatched);
+  return out;
+}
+async function loadSchoolLocations(){
+  let osm = null;
+  try{
+    const cached = JSON.parse(localStorage.getItem(SCHOOL_CACHE_KEY) || 'null');
+    if(cached && Array.isArray(cached.schools)){
+      osm = cached.schools;
+      if(Date.now() - cached.savedAt < SCHOOL_CACHE_DAYS*864e5){ schoolCoords = matchSchools(osm); schoolCoordsLoaded = true; return; }
+    }
+  }catch(e){}
+  try{
+    const q = '[out:json][timeout:25];(node["amenity"="school"](43.30,-80.75,43.65,-80.15);way["amenity"="school"](43.30,-80.75,43.65,-80.15););out center tags;';
+    const res = await fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q));
+    const data = await res.json();
+    osm = (data.elements||[]).map(e=>({
+      name: e.tags && e.tags.name, lat: e.lat != null ? e.lat : (e.center && e.center.lat), lng: e.lon != null ? e.lon : (e.center && e.center.lon)
+    })).filter(o=>o.name && o.lat != null && o.lng != null);
+    try{ localStorage.setItem(SCHOOL_CACHE_KEY, JSON.stringify({savedAt:Date.now(), schools:osm})); }catch(e){}
+  }catch(e){
+    console.warn('Could not load school locations (offline?):', e);
+  }
+  if(osm){ schoolCoords = matchSchools(osm); schoolCoordsLoaded = true; }
+}
+function nearestSchool(latlng){
+  let best = null;
+  Object.keys(schoolCoords).forEach(name=>{
+    schoolCoords[name].forEach(c=>{
+      const d = distMetres(latlng.lat, latlng.lng, c.lat, c.lng);
+      if(!best || d < best.d) best = {name, d};
+    });
+  });
+  return (best && best.d <= 5000) ? best : null; // ignore if nothing within 5 km
+}
+function fmtDistance(m){ return m < 1000 ? Math.round(m/10)*10 + ' m' : (m/1000).toFixed(1) + ' km'; }
+
+function applySchoolSuggestion(){
+  const sel = document.getElementById('mSchool');
+  if(!sel || !draftLatLng) return;
+  const old = sel.querySelector('optgroup[data-suggested]');
+  if(old) old.remove();
+  const near = nearestSchool(draftLatLng);
+  if(!near) return;
+  const og = document.createElement('optgroup');
+  og.label = '📍 Suggested — closest to your pin';
+  og.dataset.suggested = '1';
+  const opt = document.createElement('option');
+  opt.value = near.name;
+  opt.textContent = near.name + ' (about ' + fmtDistance(near.d) + ' away)';
+  og.appendChild(opt);
+  sel.insertBefore(og, sel.firstChild);
+  if(!mSchoolTouched) sel.value = near.name;
+}
+
 function openAddModal(){
   pendingSpecies = null;
   document.getElementById('coordNote').textContent = 'Pin location: ' + draftLatLng.lat.toFixed(5) + ', ' + draftLatLng.lng.toFixed(5);
@@ -1886,7 +1985,10 @@ function openAddModal(){
   wireHeightField('m');
   document.getElementById('mDiameterWrap').innerHTML = diameterFieldHtml('m', null);
   wireDiameterField('m');
+  mSchoolTouched = false;
   document.getElementById('mSchool').selectedIndex = 0;
+  applySchoolSuggestion();
+  if(!schoolCoordsLoaded) loadSchoolLocations().then(applySchoolSuggestion); // first use, or still loading
   renderSpeciesButton(document.getElementById('mSpeciesBtn'), null);
   document.getElementById('modalOverlay').classList.add('show');
 }
@@ -2280,6 +2382,7 @@ function wireEvents(){
   });
 
   document.getElementById('cancelModalBtn').addEventListener('click', closeAddModal);
+  document.getElementById('mSchool').addEventListener('change', ()=>{ mSchoolTouched = true; });
   document.getElementById('submitTreeBtn').addEventListener('click', submitTree);
   document.getElementById('modalOverlay').addEventListener('click', (e)=>{
     if(e.target.id==='modalOverlay') closeAddModal();
@@ -2324,6 +2427,7 @@ function init(){
   loadMyVotes();
   populateFilterOptions();
   renderMarkers();
+  loadSchoolLocations(); // background: school positions for the 'closest school' suggestion
   initBackend(); // loads cache, then polls the sheet; non-blocking so the map is usable immediately
 }
 init();
