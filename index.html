@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#374F2C">
 <meta name="description" content="Collaborative schoolyard tree map for Waterloo Region District School Board students and teachers.">
-<title>eTree — WRDSB Tree Map</title>
+<title>Understory — WRDSB Tree Map</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -147,6 +147,30 @@
     border-radius:8px;font-size:14px;font-weight:700;color:var(--moss-dark);min-height:20px;
   }
   .calc-overlay{z-index:1200;}
+  .idh-modal{width:560px;}
+  .idh-group{margin-bottom:12px;}
+  .idh-label{font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:5px;}
+  .idh-chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .idh-chip{
+    display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--line);
+    border-radius:20px;background:var(--surface-2);font-size:12px;font-weight:600;color:var(--ink-soft);
+  }
+  .idh-chip.active{background:var(--moss);border-color:var(--moss);color:#F4F1E4;}
+  .idh-modal input[type=text]{
+    width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:6px;
+    background:var(--surface-2);font-size:13.5px;color:var(--ink);
+  }
+  .idh-count{font-size:12.5px;font-weight:700;color:var(--moss-dark);margin:8px 0;}
+  .idh-card{display:flex;gap:10px;align-items:flex-start;padding:9px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);margin-bottom:8px;}
+  .idh-thumb{width:48px;height:48px;border-radius:7px;background:var(--approved-bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;}
+  .idh-thumb img{width:100%;height:100%;object-fit:cover;}
+  .idh-info{flex:1;min-width:0;}
+  .idh-name{font-weight:700;font-size:14px;}
+  .idh-sci{font-style:italic;font-size:11.5px;color:var(--ink-soft);}
+  .idh-clues{font-size:11.5px;color:var(--ink);line-height:1.45;margin-top:4px;}
+  .idh-note{font-size:11.5px;color:var(--ink-soft);margin:6px 0 10px 0;line-height:1.45;}
+  .intro-badge{display:inline-block;font-size:9.5px;font-weight:700;color:#7A4A12;background:#F6E0B8;border-radius:4px;padding:0 4px;margin-left:4px;vertical-align:middle;}
+  .idhelp-btn{margin:0 0 8px 0;}
   .map-ctrl-btn{
     background:var(--surface);border:1px solid var(--line);border-radius:8px;
     padding:8px 13px;box-shadow:var(--shadow);font-weight:600;font-size:13px;color:var(--ink);
@@ -490,7 +514,7 @@
         <button type="button" class="map-ctrl-btn" id="locateBtn" title="Show my location">📍 My location</button>
       </div>
       <div id="map"></div>
-      <div class="map-banner" id="addmodeBanner">Tap anywhere on the map to drop a pin for the tree you're logging.
+      <div class="map-banner" id="addmodeBanner">Zoom in as close as you like, then tap the spot where the tree's trunk is.
         <div style="margin-top:8px;"><button class="btn secondary small" id="cancelAddBtn">Cancel</button></div>
       </div>
       <div class="map-banner" id="correctionBanner">Tap the map to show where you think this tree actually is.
@@ -571,6 +595,7 @@
         <span class="placeholder-thumb">🍃</span>
         <span class="species-name-block"><span class="cn">Choose a species…</span></span>
       </button>
+      <button type="button" class="btn secondary small idhelp-btn" id="mIdHelpBtn" style="margin-top:8px;">🔍 Help me ID species</button>
     </div>
     <div class="field" id="mHeightWrap"></div>
     <div class="field" id="mDiameterWrap"></div>
@@ -590,6 +615,26 @@
     <div class="modal-actions">
       <button class="btn secondary" id="cancelCorrectionBtn" style="flex:1;">Cancel</button>
       <button class="btn" id="submitCorrectionBtn" style="flex:1;">Submit correction</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help me ID species -->
+<div class="modal-overlay calc-overlay" id="idhOverlay">
+  <div class="modal idh-modal">
+    <h3 class="serif">Help me ID this species</h3>
+    <p class="coord-note">Answer what you can; the list narrows as you go. Based on the WRDSB "Common School Trees" leaf key and the "Trees by Bud, Bark and Branch Pattern" poster. Keep in mind that identifying trees is tricky, so do your best.</p>
+    <div class="seg" id="idhTabs">
+      <button type="button" data-tab="leaf" class="active">🍃 Leaves &amp; needles</button>
+      <button type="button" data-tab="winter">❄️ Winter: buds, twigs, bark</button>
+    </div>
+    <div id="idhBody">
+      <div id="idhControls"></div>
+      <div class="idh-count" id="idhCount"></div>
+      <div id="idhResults"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="idhCloseBtn" style="flex:1;">Close</button>
     </div>
   </div>
 </div>
@@ -617,7 +662,7 @@
 <div class="species-panel" id="speciesPanel">
   <div class="search"><input type="text" id="speciesSearch" placeholder="Search species (e.g. maple, oak)…"></div>
   <div class="species-list" id="speciesList"></div>
-  <div class="species-legend">Matches the WRDSB leaf key · R = flagged regionally rare on the key</div>
+  <div class="species-legend">Based on the WRDSB leaf key and winter poster · R = regionally rare</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -755,6 +800,50 @@ const ALL_SCHOOL_NAMES = Object.values(SCHOOLS).flat();
 // branching pattern, and whether it's flagged "regionally rare" on the key) — shown
 // in the species picker and on the tree card so kids don't need the paper key in hand.
 // These are educational approximations, not species-specific scientific measurements.
+
+// Winter identification clues, from the WRDSB Outdoor & Environmental Education
+// "Trees by Bud, Bark and Branch Pattern" poster (the "3 B's": Branching, Buds, Bark).
+// br = twig branching; barkType/thorns are simple categories used by the ID helper's filters;
+// intro = marked "introduced species" on the poster.
+const WINTER_DATA = {
+  "Fagus grandifolia":{br:"alternate",twigs:"Smooth, shiny, light brown",buds:"Pointy, 1.5–2.5 cm long",bark:"Smooth and grey",barkType:"smooth"},
+  "Liriodendron tulipifera":{br:"alternate",twigs:"Purple, with a large shield-shaped leaf scar",buds:"Purple, smooth, rounded and flat",bark:"Round ridges, deep grooves",barkType:"ridged"},
+  "Platanus occidentalis":{br:"alternate",twigs:"Thin, light brown, zig-zagged",buds:"Triangular, shiny red-brown",bark:"Camouflage pattern of peeling patches",barkType:"peeling"},
+  "Acer platanoides":{br:"opposite",twigs:"Purple/red, hairless",buds:"Purple/red, rounded",bark:"Dark grey, diagonal grooves",barkType:"ridged"},
+  "Acer saccharum":{br:"opposite",twigs:"Shiny red/brown, hairless",buds:"Pointy terminal buds, 6–12 mm long",bark:"White-washed ridges, shallow grooves",barkType:"ridged"},
+  "Acer saccharinum":{br:"opposite",twigs:"Shiny red/brown, hairless",buds:"Reddish, rounded, hairless, circling the twig",bark:"Grey, rectangular flaking strips",barkType:"flaky"},
+  "Acer rubrum":{br:"opposite",twigs:"Shiny red/brown, hairless",buds:"Reddish, rounded, hairless",bark:"Fine reddish flakes",barkType:"flaky"},
+  "Acer negundo":{br:"opposite",twigs:"Brown to greenish/purple, shiny or waxy",buds:"Finely white-hairy, rounded",bark:"Flat, irregular ridges",barkType:"ridged"},
+  "Quercus rubra":{br:"alternate",twigs:"Reddish brown, hairless",buds:"Cluster at the tip; pointy, shiny red-brown, mostly hairless",bark:"Light grey, long broad ridges",barkType:"ridged"},
+  "Quercus alba":{br:"alternate",twigs:"Grey-brown, some fine hairs; often bend upward near the end",buds:"Flat and round",bark:"Pale grey to reddish, scaly",barkType:"flaky"},
+  "Populus tremuloides":{br:"alternate",twigs:"Thin, shiny green/brown/grey",buds:"Shiny red-brown",bark:"Smooth greenish grey, grooved with age",barkType:"smooth"},
+  "Populus balsamifera":{br:"alternate",twigs:"Orange-brown, thick",buds:"Pointy, shiny orange-brown, sticky",bark:"Scaly ridges, greenish when young",barkType:"ridged"},
+  "Populus deltoides":{br:"alternate",twigs:null,buds:"Large, red to yellow, hairless",bark:"Deeply grooved, yellowish grey",barkType:"ridged"},
+  "Populus grandidentata":{br:"alternate",twigs:null,buds:"Orange-brown with a whitish wash",bark:"Dark grey and grooved, orangish cast",barkType:"ridged"},
+  "Betula papyrifera":{br:"alternate",twigs:"Thin, dark red-brown, speckled",buds:"A bit pointy, greenish with brown scale tips",bark:"White, with horizontal lines, paper-like",barkType:"peeling"},
+  "Betula alleghaniensis":{br:"alternate",twigs:"Delicate, dark red-brown, speckled, straight",buds:"Pointy; scales red-brown with yellow at the base",bark:"Yellow, shaggy",barkType:"peeling"},
+  "Morus alba":{br:"alternate",twigs:"Light brown (branches orange-brown)",buds:"Plump, red-brown",bark:"Long, grey, flaky plates, deep grooves",barkType:"flaky"},
+  "Ulmus americana":{br:"alternate",twigs:"Greenish-brown, sometimes zig-zag",buds:"Red-brown, pointed",bark:"Irregular scaly ridges, criss-crossed",barkType:"ridged"},
+  "Tilia americana":{br:"alternate",twigs:"Zig-zag (Littleleaf Linden is similar but has reddish twigs)",buds:"Round, plump, bright red",bark:"Very shallow vertical grooves",barkType:"ridged"},
+  "Catalpa speciosa":{br:"opposite",twigs:"Brown or green with white speckles; large circular leaf scar with a ring of veins",buds:null,bark:"Pale grey, block-like ridges that spiral up the tree",barkType:"ridged"},
+  "Prunus serotina":{br:"alternate",twigs:"Thin, red-brown",buds:"Red-brown with dark scale tips",bark:"Black, like burnt cornflakes",barkType:"flaky"},
+  "Fraxinus americana":{br:"opposite",twigs:"Thick, greyish green, shiny",buds:"Terminal bud looks like a chocolate chip",bark:"Criss-crossed ridges",barkType:"ridged"},
+  "Carya ovata":{br:"alternate",twigs:null,buds:"Peeling bud scales",bark:"Large hanging strips",barkType:"peeling"},
+  "Aesculus hippocastanum":{br:"opposite",twigs:null,buds:"Large, bright red",bark:"Reddish-brown, patchy flakes",barkType:"flaky",intro:true},
+  "Juglans nigra":{br:"alternate",twigs:"Thick and hairy",buds:"Terminal bud rounded; two buds sit together; leaf scar is flat-notched",bark:"Heavily criss-crossed",barkType:"ridged"},
+  "Gleditsia triacanthos":{br:"alternate",twigs:"Light brown, zig-zag",buds:"Very small side buds; no end bud, twig ends in a club",bark:"Reddish-grey, irregular grooves",barkType:"ridged",thorns:true},
+  "Robinia pseudoacacia":{br:"alternate",twigs:"Brown to red-black, ridged",buds:"Paired thorns at each bud",bark:"Shallow, widely spaced ridges with small thorns",barkType:"ridged",thorns:true,intro:true},
+  "Celtis occidentalis":{br:"alternate",twigs:"Slender, orange to brown",buds:"In 2 rows along the twig; no end bud",bark:"Warty, corky, irregular ridges",barkType:"warty"},
+  "Salix babylonica":{br:"alternate",twigs:"Fine, yellow-brown, flexible",buds:"Light brown to orangish, a single scale (like a fingernail)",bark:"Deeply grooved, criss-crossed flat ridges",barkType:"ridged"},
+  "Rhamnus cathartica":{br:"opposite",twigs:"Straight, with a short thorn at the tip",buds:"Cone-shaped, dark brown",bark:"Dark grey, bumpy, sometimes peeling",barkType:"warty",thorns:true,intro:true},
+  "Rhus typhina":{br:"alternate",twigs:"Large, covered in fine hairs (most will still have big red fruit heads)",buds:"Pale brown, pyramidal",bark:"Pale grey, warty patches",barkType:"warty"},
+  "Crataegus monogyna":{br:"alternate",twigs:"Chocolate brown with white speckles; watch for very sharp thorns over 3 cm",buds:"Small, round, red",bark:"Fine, shallow, pale brown",barkType:"ridged",thorns:true},
+  "Asimina triloba":{br:"alternate",twigs:null,buds:"Terminal bud elongated with scales; side buds smaller and rounded",bark:"Shiny dark brown, warty",barkType:"warty"},
+  "Amelanchier canadensis":{br:"alternate",twigs:"Grey-brown",buds:"Red, pointy and scaled",bark:"Shallow vertical lines",barkType:"ridged"},
+  "Larix laricina":{br:"alternate",twigs:"Bare twigs with small cones; our only conifer that drops all its needles in autumn",buds:null,bark:null,barkType:null}
+};
+const COMPOUND_SCI = new Set(['Acer negundo','Fraxinus americana','Carya ovata','Aesculus hippocastanum','Juglans nigra','Robinia pseudoacacia','Gleditsia triacanthos']);
+
 const CURATED_SPECIES = [
   ["American Beech","Fagus grandifolia","slow","broadleaf",0.56,
     {size:"25 cm", branching:"alternate", rare:false,
@@ -831,7 +920,7 @@ const CURATED_SPECIES = [
   ["Black Walnut","Juglans nigra","medium","broadleaf",0.51,
     {size:"20–60 cm", branching:"alternate", rare:false,
      features:["15–23 leaflets","Leaflets narrow and pointy, getting smaller toward the ends"]}],
-  ["Locust","Robinia pseudoacacia","fast","broadleaf",0.69,
+  ["Black Locust","Robinia pseudoacacia","fast","broadleaf",0.69,
     {size:"20–30 cm", branching:"alternate", rare:false,
      features:["14–30 small leaflets, occasionally double-compound","Some have thorns"]}],
   ["Willow","Salix babylonica","fast","broadleaf",0.35,
@@ -857,8 +946,18 @@ const CURATED_SPECIES = [
      features:["Scale-like and flat"]}],
   ["Tamarack","Larix laricina","fast","conifer",0.49,
     {size:"2–5 cm needles", branching:"whorled", rare:false,
-     features:["Short needles in tufts of 15–60","Needles turn yellow and drop in autumn"]}]
-].map(([cn,sn,growth,leaf,density,id])=>({commonName:cn, scientificName:sn, growth:growth, leaf:leaf, density:density, id:id}));
+     features:["Short needles in tufts of 15–60","Needles turn yellow and drop in autumn"]}],
+  // ---- also on the winter poster ("Trees by Bud, Bark and Branch Pattern"); not on the leaf key ----
+  ["Yellow Birch","Betula alleghaniensis","medium","broadleaf",0.55,null],
+  ["Honey Locust","Gleditsia triacanthos","fast","broadleaf",0.60,
+    {size:"20–30 cm", branching:"alternate", rare:false,
+     features:["14–30 small leaflets, occasionally double-compound","Some have thorns"]}],
+  ["European Buckthorn","Rhamnus cathartica","fast","broadleaf",0.55,null],
+  ["Staghorn Sumac","Rhus typhina","fast","broadleaf",0.45,null],
+  ["Hawthorn","Crataegus monogyna","medium","broadleaf",0.70,null],
+  ["Pawpaw","Asimina triloba","medium","broadleaf",0.40,null],
+  ["Serviceberry","Amelanchier canadensis","medium","broadleaf",0.66,null]
+].map(([cn,sn,growth,leaf,density,id])=>({commonName:cn, scientificName:sn, growth:growth, leaf:leaf, density:density, id:id, winter:WINTER_DATA[sn]||null}));
 
 const BRANCHING_LABEL = { alternate:'Alternate branching', opposite:'Opposite branching', whorled:'Whorled branching' };
 
@@ -1182,15 +1281,15 @@ let canopyLayer, canopiesOn = true;
 let streetLayer, satelliteLayer, locationMarker, locationAccuracyCircle, locating = false;
 
 function initMap(){
-  map = L.map('map', {zoomControl:true}).setView([43.4550, -80.4750], 11);
+  map = L.map('map', {zoomControl:true, maxZoom:22}).setView([43.4550, -80.4750], 11);
 
   streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+    maxNativeZoom: 19, maxZoom: 22, // beyond 19 the same tiles are simply enlarged, which is handy for placing a pin precisely
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
 
   satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
+    maxNativeZoom: 19, maxZoom: 22,
     attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
   });
 
@@ -1264,7 +1363,7 @@ function toggleLocate(){
   } else {
     locating = true;
     btn.classList.add('active');
-    map.locate({ setView:true, maxZoom:17, watch:true, enableHighAccuracy:true });
+    map.locate({ setView:true, maxZoom:20, watch:true, enableHighAccuracy:true });
   }
 }
 
@@ -1502,14 +1601,9 @@ function renderDrawer(){
 
   html += '<div class="attr-row"><div class="attr-label">Location</div><div class="attr-value">' + tree.lat.toFixed(5) + ', ' + tree.lng.toFixed(5) + '</div>' + voteSection('location') + '</div>';
   const speciesClues = CURATED_SPECIES.find(s=>s.scientificName===tree.scientificName);
-  const cluesHtml = speciesClues ? (
-    '<div class="id-hint"><strong>Leaf key field marks:</strong> ' +
-    escapeHtml([speciesClues.id.size].concat(speciesClues.id.features).join(' · ')) +
-    ' · ' + escapeHtml(BRANCHING_LABEL[speciesClues.id.branching] || '') +
-    (speciesClues.id.rare ? ' · <span class="rare-badge">R</span> regionally rare' : '') +
-    '</div>'
-  ) : '';
-  html += '<div class="attr-row"><div class="attr-label">Species</div><div class="attr-value">' + escapeHtml(tree.species) + '</div>' + cluesHtml + voteSection('species') + '</div>';
+  const cluesHtml = fieldMarksHtml(speciesClues);
+  const idHelpBtn = locked ? '' : '<button type="button" class="btn secondary small idhelp-btn" data-idhelp="1">🔍 Help me ID species</button>';
+  html += '<div class="attr-row"><div class="attr-label">Species</div><div class="attr-value">' + escapeHtml(tree.species) + '</div>' + cluesHtml + idHelpBtn + voteSection('species') + '</div>';
   html += '<div class="attr-row"><div class="attr-label">Height</div><div class="attr-value">' + tree.height + ' m</div>' + voteSection('height') + '</div>';
   html += '<div class="attr-row"><div class="attr-label">Diameter (DBH)</div><div class="attr-value">' + tree.diameter + ' cm</div>' + voteSection('diameter') + '</div>';
 
@@ -1522,6 +1616,16 @@ function renderDrawer(){
   setDrawerOpen(true);
 
   document.getElementById('drawerCloseBtn').addEventListener('click', ()=>{ selectedTreeId=null; renderDrawer(); });
+  drawer.querySelectorAll('[data-idhelp]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openIdHelper((sp)=>{
+      if(sp.scientificName === tree.scientificName){
+        const mine = (myVotes[tree.id] && myVotes[tree.id].species) || null;
+        if(!(mine && mine.kind === 'agree')) applyVoteChange(tree.id, 'species', {kind:'agree'});
+      } else {
+        submitAlternative(tree.id, 'species', {commonName: sp.commonName, scientificName: sp.scientificName});
+      }
+    }, (sp)=> sp.scientificName === tree.scientificName ? 'Agree — it is this one' : 'Suggest this instead'));
+  });
   drawer.querySelectorAll('[data-vote-action="agree"]').forEach(btn=>{
     btn.addEventListener('click', ()=> toggleAgree(tree.id, btn.dataset.voteAttr));
   });
@@ -1781,6 +1885,167 @@ function computeHc(){
   }
 }
 
+/* ============================================================
+   "HELP ME ID SPECIES" — narrows the species list using the WRDSB
+   leaf key (summer) and the winter bud/bark/branch poster
+   ============================================================ */
+const BARK_CHOICES = [['smooth','Smooth'],['ridged','Ridged / grooved'],['flaky','Flaky / scaly'],['peeling','Peeling strips'],['warty','Warty / bumpy']];
+const IDH_SVG_ALT = '<svg viewBox="0 0 60 44" width="30" height="22" aria-hidden="true"><path d="M30 42V3M30 34L12 27M30 21L48 14M30 10L14 4" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>';
+const IDH_SVG_OPP = '<svg viewBox="0 0 60 44" width="30" height="22" aria-hidden="true"><path d="M30 42V3M30 33L10 26M30 33L50 26M30 14L12 8M30 14L48 8" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>';
+let idh = null;        // current helper state
+let idhShown = [];     // species currently listed (so "pick" buttons can refer to them by index)
+
+function idhDefaults(){ return {tab:'leaf', branching:'any', leafType:'any', len:'', thorns:'any', bark:'any', q:''}; }
+
+function openIdHelper(onPick, pickLabel){
+  idh = Object.assign(idhDefaults(), {onPick: onPick, pickLabel: pickLabel || 'Use this species'});
+  setIdhTab('leaf');
+  document.getElementById('idhOverlay').classList.add('show');
+}
+function closeIdHelper(){
+  document.getElementById('idhOverlay').classList.remove('show');
+  idh = null;
+}
+function setIdhTab(tab){
+  if(!idh) return;
+  idh.tab = tab;
+  document.querySelectorAll('#idhTabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.getElementById('idhControls').innerHTML = idhControlsHtml();
+  renderIdhResults();
+}
+
+function idhChips(key, options){
+  return '<div class="idh-chips">' + options.map(o =>
+    '<button type="button" class="idh-chip' + (idh[key]===o[0] ? ' active' : '') + '" data-idh="' + key + '" data-val="' + o[0] + '">' + o[1] + '</button>'
+  ).join('') + '</div>';
+}
+function idhControlsHtml(){
+  let h = '<div class="idh-group"><div class="idh-label">' + (idh.tab==='winter' ? '1. Branching' : 'Branching') +
+    ' — look at where leaves or buds attach to a twig</div>' +
+    idhChips('branching', [['any','Not sure'],['alternate', IDH_SVG_ALT + ' Alternate (staggered)'],['opposite', IDH_SVG_OPP + ' Opposite (in pairs)']]) + '</div>';
+  if(idh.tab === 'leaf'){
+    h += '<div class="idh-group"><div class="idh-label">What does the leaf look like?</div>' +
+      idhChips('leafType', [['any','Not sure'],['simple','One flat leaf'],['compound','Many leaflets on one stem'],['needles','Needles or scales']]) + '</div>';
+    h += '<div class="idh-group"><div class="idh-label">Leaf (or needle) length in cm — optional</div>' +
+      '<input type="number" id="idhLen" min="0" step="0.5" placeholder="e.g. 12" value="' + escapeHtml(idh.len) + '" style="max-width:140px;"></div>';
+  } else {
+    h += '<div class="idh-note">Evergreens (pines, spruces, hemlock, cedar) keep their needles all winter, so use the Leaves tab for those.</div>';
+    h += '<div class="idh-group"><div class="idh-label">Thorns on the twigs?</div>' +
+      idhChips('thorns', [['any','Not sure'],['yes','Yes, thorns'],['no','No thorns']]) + '</div>';
+    h += '<div class="idh-group"><div class="idh-label">3. Bark (for bigger trees)</div>' +
+      idhChips('bark', [['any','Not sure']].concat(BARK_CHOICES)) + '</div>';
+  }
+  h += '<div class="idh-group"><div class="idh-label">' + (idh.tab==='winter' ? '2. Buds &amp; twigs — search clues' : 'Search clues') + ' (optional)</div>' +
+    '<input type="text" id="idhQ" placeholder="e.g. sticky, heart-shaped, red bud, milky sap" value="' + escapeHtml(idh.q) + '"></div>';
+  return h;
+}
+
+// "8–20 cm" / "25 cm" / "1–2 mm scales" -> {min,max} in cm
+function parseSizeRange(str){
+  const m = /([\d.]+)\s*(?:[–-]\s*([\d.]+))?\s*(cm|mm)/.exec(str || '');
+  if(!m) return null;
+  const f = m[3] === 'mm' ? 0.1 : 1;
+  const lo = parseFloat(m[1]) * f;
+  const hi = (m[2] ? parseFloat(m[2]) : parseFloat(m[1])) * f;
+  return {min: lo, max: hi};
+}
+
+function idhMatches(){
+  const words = idh.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return CURATED_SPECIES.filter(s=>{
+    let hay;
+    if(idh.tab === 'leaf'){
+      if(!s.id) return false;
+      const b = s.id.branching;
+      if(idh.branching === 'alternate' && b !== 'alternate') return false;
+      if(idh.branching === 'opposite' && !(b === 'opposite' || (b === 'whorled' && s.leaf !== 'conifer'))) return false;
+      const compound = COMPOUND_SCI.has(s.scientificName);
+      if(idh.leafType === 'needles' && s.leaf !== 'conifer') return false;
+      if(idh.leafType === 'compound' && !compound) return false;
+      if(idh.leafType === 'simple' && (s.leaf === 'conifer' || compound)) return false;
+      const len = parseFloat(idh.len);
+      if(!isNaN(len) && len > 0){
+        const r = parseSizeRange(s.id.size);
+        if(r && !(len >= r.min * 0.85 && len <= r.max * 1.15)) return false;
+      }
+      hay = [s.commonName, s.scientificName, s.id.size].concat(s.id.features).join(' ');
+    } else {
+      const w = s.winter;
+      if(!w) return false;
+      if(idh.branching !== 'any' && w.br !== idh.branching) return false;
+      if(idh.thorns === 'yes' && !w.thorns) return false;
+      if(idh.thorns === 'no' && w.thorns) return false;
+      if(idh.bark !== 'any' && w.barkType !== idh.bark) return false;
+      hay = [s.commonName, s.scientificName, w.twigs, w.buds, w.bark].join(' ');
+    }
+    hay = hay.toLowerCase();
+    return words.every(w => hay.indexOf(w) !== -1);
+  });
+}
+
+function renderIdhResults(){
+  if(!idh) return;
+  idhShown = idhMatches();
+  const count = document.getElementById('idhCount');
+  const box = document.getElementById('idhResults');
+  if(!idhShown.length){
+    count.textContent = 'No species match all of those clues';
+    box.innerHTML = '<div class="idh-note">Try choosing "Not sure" for one of the questions, or clear the search box. Your tree may also be one of the less common ones.</div>';
+    return;
+  }
+  count.textContent = idhShown.length + ' possible species' + (idhShown.length===1 ? '' : ' — check the clues against your tree');
+  box.innerHTML = idhShown.map((s,i)=>{
+    const label = typeof idh.pickLabel === 'function' ? idh.pickLabel(s) : idh.pickLabel;
+    let clues = '';
+    if(idh.tab === 'leaf'){
+      clues = '<div><strong>' + escapeHtml(s.id.size) + '</strong> · ' + escapeHtml(s.id.features.join(' · ')) + ' · ' + escapeHtml(BRANCHING_LABEL[s.id.branching]||'') + '</div>';
+    } else {
+      const w = s.winter;
+      if(w.twigs) clues += '<div><strong>Twigs:</strong> ' + escapeHtml(w.twigs) + '</div>';
+      if(w.buds)  clues += '<div><strong>Buds:</strong> ' + escapeHtml(w.buds) + '</div>';
+      if(w.bark)  clues += '<div><strong>Bark:</strong> ' + escapeHtml(w.bark) + '</div>';
+      clues += '<div>' + (w.br==='opposite' ? 'Opposite branching' : 'Alternate branching') + (w.thorns ? ' · has thorns' : '') + '</div>';
+    }
+    const badges = ((s.id && s.id.rare) ? ' <span class="rare-badge">R</span>' : '') + ((s.winter && s.winter.intro) ? ' <span class="intro-badge">Introduced</span>' : '');
+    const thumb = s.photoUrl ? '<img src="' + s.photoUrl + '" alt="">' : '🍃';
+    return '<div class="idh-card"><span class="idh-thumb" data-sci="' + escapeHtml(s.scientificName) + '">' + thumb + '</span>' +
+      '<div class="idh-info"><div class="idh-name">' + escapeHtml(s.commonName) + badges + '</div>' +
+      '<div class="idh-sci">' + escapeHtml(s.scientificName) + '</div><div class="idh-clues">' + clues + '</div>' +
+      '<button type="button" class="btn small" data-idh-pick="' + i + '" style="margin-top:7px;">' + escapeHtml(label) + '</button></div></div>';
+  }).join('') +
+    '<div class="idh-note">More posters and resources: <a href="https://www.wrdsb.ca/trees" target="_blank" rel="noopener">wrdsb.ca/trees</a></div>';
+  // fill in photos from iNaturalist as they arrive
+  idhShown.slice(0, 12).forEach(async (s)=>{
+    if(s.photoUrl) return;
+    const info = await fetchSpeciesPhoto(s.scientificName);
+    if(info && info.photoUrl){
+      s.photoUrl = info.photoUrl;
+      document.querySelectorAll('.idh-thumb').forEach(el=>{
+        if(el.dataset.sci === s.scientificName) el.innerHTML = '<img src="' + info.photoUrl + '" alt="">';
+      });
+    }
+  });
+}
+
+function fieldMarksHtml(sp){
+  if(!sp) return '';
+  let h = '';
+  if(sp.id){
+    h += '<div><strong>Leaf key:</strong> ' + escapeHtml([sp.id.size].concat(sp.id.features).join(' · ')) +
+      ' · ' + escapeHtml(BRANCHING_LABEL[sp.id.branching] || '') +
+      (sp.id.rare ? ' · <span class="rare-badge">R</span> regionally rare' : '') + '</div>';
+  }
+  if(sp.winter){
+    const w = sp.winter, parts = [];
+    if(w.twigs) parts.push('Twigs: ' + w.twigs);
+    if(w.buds) parts.push('Buds: ' + w.buds);
+    if(w.bark) parts.push('Bark: ' + w.bark);
+    h += '<div><strong>Winter poster:</strong> ' + escapeHtml(parts.join(' · ')) +
+      (w.intro ? ' · <span class="intro-badge">Introduced species</span>' : '') + '</div>';
+  }
+  return h ? '<div class="id-hint">' + h + '</div>' : '';
+}
+
 function openCorrectionFlow(treeId, attr){
   if(attr === 'location'){
     startLocationCorrection(treeId);
@@ -1805,7 +2070,8 @@ function openCorrectionModal(treeId, attr){
   const wrap = document.getElementById('correctionFieldWrap');
 
   if(attr === 'species'){
-    wrap.innerHTML = '<label>Species</label><button type="button" class="species-picker-btn" id="corSpeciesBtn"></button>';
+    wrap.innerHTML = '<label>Species</label><button type="button" class="species-picker-btn" id="corSpeciesBtn"></button>' +
+      '<button type="button" class="btn secondary small idhelp-btn" id="corIdHelpBtn" style="margin-top:8px;">🔍 Help me ID species</button>';
     const btn = document.getElementById('corSpeciesBtn');
     const preset = mine ? {commonName:mine.commonName, scientificName:mine.scientificName, photoUrl:null} : null;
     renderSpeciesButton(btn, preset);
@@ -1814,6 +2080,10 @@ function openCorrectionModal(treeId, attr){
       correctionContext.value = species;
       renderSpeciesButton(btn, species);
     }));
+    document.getElementById('corIdHelpBtn').addEventListener('click', ()=> openIdHelper((species)=>{
+      correctionContext.value = species;
+      renderSpeciesButton(btn, species);
+    }, 'Use this species'));
   } else {
     if(attr === 'height'){
       wrap.innerHTML = heightFieldHtml('cor', mine);
@@ -1866,7 +2136,7 @@ function cancelLocationCorrection(){
 
 let flashMarker = null, flashMarkerTimer = null;
 function flashSuggestedLocation(lat, lng){
-  map.setView([lat,lng], Math.max(map.getZoom(), 17));
+  map.setView([lat,lng], Math.max(map.getZoom(), 19));
   if(flashMarker){ map.removeLayer(flashMarker); }
   if(flashMarkerTimer) clearTimeout(flashMarkerTimer);
   flashMarker = L.circleMarker([lat,lng], {radius:14, color:'#B9822C', weight:3, fillColor:'#B9822C', fillOpacity:0.25}).addTo(map);
@@ -2066,7 +2336,9 @@ function speciesItemHtml(item, idx){
     const bits = [item.id.size].concat((item.id.features||[]).slice(0,2));
     clue = '<span class="id-clue">' + escapeHtml(bits.join(' · ')) + '</span>';
   }
-  const rareBadge = (item.id && item.id.rare) ? ' <span class="rare-badge" title="Flagged as regionally rare on the leaf key">R</span>' : '';
+  if(!item.id && item.winter && item.winter.buds){ clue = '<span class="id-clue">Winter: ' + escapeHtml(item.winter.buds) + '</span>'; }
+  const rareBadge = ((item.id && item.id.rare) ? ' <span class="rare-badge" title="Flagged as regionally rare on the leaf key">R</span>' : '') +
+    ((item.winter && item.winter.intro) ? ' <span class="intro-badge">Introduced</span>' : '');
   return '<div class="species-item" data-idx="'+idx+'" style="cursor:pointer;">' + thumb +
     '<span class="species-name-block"><span class="cn">'+escapeHtml(item.commonName)+rareBadge+'</span>' +
     '<span class="sn">'+escapeHtml(item.scientificName)+'</span>' + clue + '</span></div>';
@@ -2392,6 +2664,36 @@ function wireEvents(){
     pendingSpecies = species;
     renderSpeciesButton(document.getElementById('mSpeciesBtn'), species);
   }));
+  document.getElementById('mIdHelpBtn').addEventListener('click', ()=> openIdHelper((species)=>{
+    pendingSpecies = species;
+    renderSpeciesButton(document.getElementById('mSpeciesBtn'), species);
+  }, 'Use this species'));
+  document.getElementById('idhCloseBtn').addEventListener('click', closeIdHelper);
+  document.getElementById('idhOverlay').addEventListener('click', (e)=>{ if(e.target.id==='idhOverlay') closeIdHelper(); });
+  document.querySelectorAll('#idhTabs button').forEach(b=>b.addEventListener('click', ()=>setIdhTab(b.dataset.tab)));
+  const idhBody = document.getElementById('idhBody');
+  idhBody.addEventListener('click', (e)=>{
+    const chip = e.target.closest('.idh-chip');
+    if(chip && idh){
+      idh[chip.dataset.idh] = chip.dataset.val;
+      chip.parentElement.querySelectorAll('.idh-chip').forEach(c=>c.classList.toggle('active', c===chip));
+      renderIdhResults();
+      return;
+    }
+    const pick = e.target.closest('[data-idh-pick]');
+    if(pick && idh){
+      const item = idhShown[parseInt(pick.dataset.idhPick,10)];
+      const cb = idh.onPick;
+      closeIdHelper();
+      if(item && cb) cb({commonName:item.commonName, scientificName:item.scientificName, photoUrl:item.photoUrl||null,
+        growth:item.growth, leaf:item.leaf, density:item.density});
+    }
+  });
+  idhBody.addEventListener('input', (e)=>{
+    if(!idh) return;
+    if(e.target.id === 'idhLen'){ idh.len = e.target.value; renderIdhResults(); }
+    if(e.target.id === 'idhQ'){ idh.q = e.target.value; renderIdhResults(); }
+  });
   document.getElementById('speciesSearch').addEventListener('input', handleSpeciesSearch);
   document.addEventListener('click', (e)=>{
     const panel = document.getElementById('speciesPanel');
